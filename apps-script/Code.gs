@@ -14,6 +14,7 @@ const CFG = {
   senderName: "VISENTIN – Vins Français d'Exception",
   replyTo: 'info@weine-visentin.de',
   bcc: '',                                     // optional: Kopie jeder Bestätigung an diese Adresse
+  notifyTo: 'info@weine-visentin.de',          // Mitteilung, wenn eine Bestellung nach einem JTL-Export eingeht
   logoUrl: 'https://paulee-berlin-2026.pages.dev/img/logo-gold.png',
   deadline: new Date('2026-11-02T23:59:59+01:00'),
   phone: '+49 30 695 199 20',
@@ -65,6 +66,7 @@ function doPost(e) {
   }
   const status = sendConfirmation(p);
   setMailStatus(ss, test, p.id, status);
+  if (!test) notifyLate(ss, p);
   return json({ ok: true });
 }
 
@@ -232,6 +234,57 @@ function setMailStatus(ss, test, id, status) {
   const sh = ss.getSheetByName(test ? SHEETS.testOrders : SHEETS.orders);
   const row = findRow(sh, id);
   if (row) sh.getRange(row, COL('Bestätigungsmail')).setValue(status);
+}
+
+/* ---------------- Nachzügler: Bestellung nach einem JTL-Export ---------------- */
+
+/** Geht eine Bestellung nach dem letzten JTL-Export ein, steht sie in keiner Importdatei: Mitteilung an das Team. */
+function notifyLate(ss, p) {
+  const last = PropertiesService.getScriptProperties().getProperty('LAST_JTL_EXPORT');
+  if (!last) return;                                        // vor dem ersten Export: kommt mit dem ersten Import
+  const status = sendLateNotice(ss, p, new Date(last));
+  addNote(ss, p.id, 'Nach dem JTL-Import eingegangen – Mitteilung an ' + CFG.notifyTo + ': ' + status);
+}
+
+function sendLateNotice(ss, p, last) {
+  const key = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
+  if (!key) return 'nicht gesendet: BREVO_API_KEY fehlt';
+  const c = p.customer, t = p.totals, d = p.delivery || {}, no = p.jtlNo || p.code;
+  const who = [c.firma, fullName(c)].filter(Boolean).join(' · ');
+  const fmt = x => Utilities.formatDate(x, 'Europe/Berlin', 'dd.MM.yyyy HH:mm');
+  const row = (k, v) => '<tr><td style="padding:3px 14px 3px 0;color:#777">' + k + '</td><td style="padding:3px 0">' + v + '</td></tr>';
+  const html = '<div style="font:14px/1.5 Arial,sans-serif;color:#2A2526">' +
+    '<p>Diese Bestellung ist <b>nach dem letzten JTL-Export</b> (' + fmt(last) + ') eingegangen und daher in keiner Importdatei enthalten. Sie steht in der Tabelle.</p>' +
+    '<table style="border-collapse:collapse">' +
+    row('Bestellnr.', '<b>' + esc(no) + '</b>') + row('Kunde', esc(who)) + row('Typ', esc(p.mode)) +
+    row('Lieferart', esc(DELIV[d.type] || d.type || '')) + row('Flaschen', t.bottles) + row('Gesamt brutto', money(t.grossCents)) +
+    row('Bestellt am', fmt(new Date(p.createdAt))) + row('Eingegangen', fmt(new Date())) + '</table>' +
+    '<p><b>Zu tun:</b><br>1. Kunden in JTL zuordnen bzw. neu anlegen, JTL-Kundennr. in der Tabelle eintragen.<br>' +
+    '2. In der Tabelle: Paulée → JTL-Importdatei erstellen, dann wie gewohnt importieren.</p>' +
+    '<p><a href="' + ss.getUrl() + '">Tabelle öffnen</a></p></div>';
+  try {
+    const r = UrlFetchApp.fetch('https://api.brevo.com/v3/smtp/email', {
+      method: 'post', contentType: 'application/json', muteHttpExceptions: true,
+      headers: { 'api-key': key, accept: 'application/json' },
+      payload: JSON.stringify({
+        sender: { name: 'Paulée 2026 – Bestellungen', email: CFG.senderEmail },
+        to: [{ email: CFG.notifyTo }],
+        subject: 'Paulée: Bestellung nach dem Import – ' + no + ' · ' + who,
+        htmlContent: html, tags: ['paulee-2026-intern']
+      })
+    });
+    const code = r.getResponseCode();
+    return code < 300 ? 'gesendet ' + Utilities.formatDate(new Date(), 'Europe/Berlin', 'dd.MM. HH:mm') : 'Fehler ' + code;
+  } catch (err) {
+    return 'Fehler: ' + String(err).slice(0, 120);
+  }
+}
+
+function addNote(ss, id, text) {
+  const sh = ss.getSheetByName(SHEETS.orders), row = findRow(sh, id);
+  if (!row) return;
+  const cell = sh.getRange(row, COL('Hinweis')), cur = String(cell.getValue() || '');
+  cell.setValue(cur ? cur + ' · ' + text : text);
 }
 
 /* ---------------- Bestätigungsmail (Brevo) ---------------- */
@@ -509,6 +562,7 @@ function jtlExport() {
 
     const stamp = Utilities.formatDate(now, 'Europe/Berlin', 'dd.MM.yyyy HH:mm') + ' · ' + fname;
     take.forEach(x => sh.getRange(x.r, H['JTL-Export']).setValue(stamp));
+    if (!test) PropertiesService.getScriptProperties().setProperty('LAST_JTL_EXPORT', now.toISOString());
     SpreadsheetApp.flush();
 
     const positions = lines.length - 1;
