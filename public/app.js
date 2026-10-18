@@ -103,9 +103,9 @@ const TXT = {
     doneTitle: 'Vielen Dank', notFound: 'Nicht gefunden.', yourNo: 'Ihre Bestellnummer',
     sentMsg: (mail, deliv) => `Ihre Bestellung ist bei uns eingegangen. Sie erhalten eine Bestätigung an <b>${mail}</b>; wegen ${deliv ? 'der Lieferung' : 'der Abholung'} melden wir uns bei Ihnen.`,
     testMsg: '<b>Testbetrieb.</b> Die Bestellung ist auf diesem Gerät gespeichert, wird aber noch nicht übertragen.',
-    waitMsg: '<b>Noch nicht übertragen – kein Empfang.</b><br>Ihre Bestellung ist auf diesem Gerät sicher gespeichert und wird automatisch gesendet, sobald Sie Empfang haben – spätestens, wenn Sie diese Seite nach dem Verlassen der Botschaft noch einmal öffnen.',
-    sendNow: 'Jetzt senden', byMail: 'Stattdessen per E-Mail senden',
-    mailHint: 'Die E-Mail wartet im Postausgang und geht automatisch raus, sobald Sie Empfang haben. Bitte nur eine der beiden Möglichkeiten nutzen.',
+    waitMsg: '<b>Noch nicht übertragen – kein Empfang.</b><br>Ihre Bestellung ist auf diesem Gerät gespeichert. Sie wird automatisch gesendet, sobald Sie diese Seite mit Empfang wieder öffnen.',
+    sendNow: 'Jetzt senden', byMail: 'Per E-Mail senden',
+    mailHint: 'Falls Sie diese Seite heute nicht mehr öffnen, senden Sie die Bestellung bitte per E-Mail. Sie wartet im Postausgang und geht automatisch raus, sobald Sie Empfang haben. Geht eine Bestellung doppelt ein, erkennen wir das an der Bestellnummer.',
     backToList: 'Zurück zur Weinliste', sending: 'Wird gesendet …',
     ordersTitle: 'Meine Bestellungen', noOrders: 'Noch keine Bestellungen auf diesem Gerät.',
     pillSent: 'übertragen', pillTest: 'Test', pillWait: 'wartet',
@@ -194,9 +194,9 @@ const TXT = {
     doneTitle: 'Thank you', notFound: 'Not found.', yourNo: 'Your order number',
     sentMsg: (mail, deliv) => `We have received your order. A confirmation will be sent to <b>${mail}</b>; we will contact you about the ${deliv ? 'delivery' : 'pick-up'}.`,
     testMsg: '<b>Test mode.</b> The order is saved on this device but not yet transmitted.',
-    waitMsg: '<b>Not sent yet – no signal.</b><br>Your order is safely saved on this device and will be sent automatically as soon as you have a signal – at the latest when you open this page again after leaving the embassy.',
-    sendNow: 'Send now', byMail: 'Send by email instead',
-    mailHint: 'The email waits in your outbox and is sent automatically once you have a signal. Please use only one of the two options.',
+    waitMsg: '<b>Not sent yet – no signal.</b><br>Your order is saved on this device. It will be sent automatically when you reopen this page with a signal.',
+    sendNow: 'Send now', byMail: 'Send by email',
+    mailHint: 'If you will not reopen this page today, please send your order by email. It waits in your outbox and goes out automatically once you have a signal. Should an order arrive twice, we recognise it by its order number.',
     backToList: 'Back to the wine list', sending: 'Sending …',
     ordersTitle: 'My orders', noOrders: 'No orders on this device yet.',
     pillSent: 'sent', pillTest: 'test', pillWait: 'waiting',
@@ -747,8 +747,8 @@ const VIEWS = {
     } else {
       h += `<div class="box warn">${t.waitMsg}</div>
         <button class="btn" data-action="retry">${t.sendNow}</button>
-        <a class="btn ghost" style="margin-top:8px" href="${esc(mailHref(p))}">${t.byMail}</a>
-        <p class="hint">${t.mailHint}</p>`;
+        <p class="hint">${t.mailHint}</p>
+        <a class="btn ghost" style="margin-top:8px" href="${esc(mailHref(p))}">${t.byMail}</a>`;
     }
     h += orderSummaryHtml(p);
     h += `<button class="btn ghost" data-action="close" style="margin-top:14px">${t.backToList}</button></div>`;
