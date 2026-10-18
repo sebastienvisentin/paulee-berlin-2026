@@ -32,8 +32,8 @@ const ORDER_COLS = ['Eingang', 'Bestellnr.', 'JTL-Kundennr.', 'JTL-Export', 'In 
   'Versand', 'Summe (B2B netto / B2C brutto)', 'MwSt.', 'Gesamt brutto', 'Newsletter', 'Gastro/Fachhandel bestätigt',
   'Bestellt am (Gerät)', 'Hinweis', 'Bestätigungsmail', 'ID', 'Daten'];
 // Spalten der Importdatei für JTL-Ameise (Verkauf → Aufträge), eine Zeile je Position
-const JTL_COLS = ['Kundennummer', 'Anmerkung', 'Voraus. Lieferdatum', 'Artikelnummer', 'Menge', 'Positionsart',
-  'Rabatt (%)', 'Hinweis (Position)', 'Artikelname', 'VK Netto', 'Auftragsnummer'];
+const JTL_COLS = ['Kundennummer', 'Anmerkung', 'Kundenkommentar', 'Voraus. Lieferdatum', 'Artikelnummer', 'Menge',
+  'Positionsart', 'Rabatt (%)', 'Hinweis (Position)', 'Artikelname', 'Auftragsnummer'];
 const ITEM_COLS = ['Bestellnr.', 'Typ', 'Kunde', 'Wein-Nr.', 'ART. NR.', 'Wein', 'Domaine', 'Einheit', 'Menge',
   'Einzelpreis', 'Summe', 'ID'];
 const COL = name => ORDER_COLS.indexOf(name) + 1;
@@ -407,29 +407,42 @@ const csvCell = v => {
   v = v == null ? '' : String(v).replace(/[\r\n]+/g, ' ').trim();
   return /[;"]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
 };
-const deNum = (x, dec) => x.toFixed(dec).replace('.', ',');
+const pad2 = n => String(n).padStart(2, '0');
 
-/** Zeilen der Importdatei für eine Bestellung: je Wein eine Artikelposition, dazu ggf. eine Versandposition. */
-function jtlRows(p, kdnr, test) {
-  const d = p.delivery || {}, t = p.totals;
-  const ordNo = p.jtlNo || p.code;                // Auftragsnummer in JTL = Bestellnummer aus der Bestätigung
-  const deliv = DELIV[d.type] || d.type;
-  const anm = ['Paulée 2026 · ' + p.code,
-    p.mode === 'B2B' ? 'Gastronomie & Fachhandel' : 'Privatkunde',
-    deliv + (d.type === 'lieferung' && !t.shipCents ? ' (versandkostenfrei)' : ''),
-    d.address ? 'Lieferanschrift: ' + d.address : '',
-    d.wish && !isoDate(d.wish) ? 'Wunschtermin: ' + d.wish : '',
-    p.note ? 'Kunde: ' + p.note : ''
-  ].filter(Boolean).join(' · ');
-  const lief = isoDate(d.wish) ? Utilities.formatDate(dateOf(d.wish), 'Europe/Berlin', 'dd.MM.yyyy') : '';
-  const rows = p.items.map(i => [kdnr, anm, lief, i.art, i.qty, 'Artikel', t.privilegePct || 0,
-    'Paulée 2026 · ' + i.n, i.wine, '', ordNo]);
-  if (t.shipCents > 0) {
-    // B2B-Versand ist netto, B2C-Versand brutto → netto mit 4 Nachkommastellen
-    const net = p.mode === 'B2B' ? t.shipCents / 100 : t.shipCents / 100 / (1 + (t.vatPct || 19) / 100);
-    rows.push([kdnr, anm, lief, '', 1, 'Versand', 0, 'Paulée 2026 · Versand', 'Versandkosten', deNum(net, 4), ordNo]);
+/** Wunschtermin → TT.MM.JJJJ. Akzeptiert Datum aus der Tabelle, JJJJ-MM-TT, TT.MM.JJJJ, TT.MM.JJ, TT.MM. – sonst ''. */
+function wishDate(v) {
+  if (v instanceof Date && !isNaN(v)) return Utilities.formatDate(v, 'Europe/Berlin', 'dd.MM.yyyy');
+  v = String(v || '').trim();
+  let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+  if (m) return m[3] + '.' + m[2] + '.' + m[1];
+  m = /^(\d{1,2})\.(\d{1,2})\.(\d{2}|\d{4})?$/.exec(v);
+  if (m) {
+    const y = !m[3] ? '2026' : m[3].length === 2 ? '20' + m[3] : m[3];
+    return pad2(m[1]) + '.' + pad2(m[2]) + '.' + y;
   }
-  return rows;
+  return '';
+}
+
+/**
+ * Zeilen der Importdatei für eine Bestellung: je Wein eine Artikelposition.
+ * Versand und Versandart trägt das Team nach dem Import in JTL ein.
+ * cur = aktuelle Werte aus der Tabelle (vom Team ggf. korrigiert): wish, note, address
+ */
+function jtlRows(p, kdnr, cur) {
+  const d = p.delivery || {}, t = p.totals;
+  cur = cur || {};
+  const wishRaw = cur.wish !== undefined && cur.wish !== '' ? cur.wish : d.wish;
+  const lief = wishDate(wishRaw);
+  // Anmerkung erscheint auf dem Auftrag beim Kunden: kurz, ohne Bestellnummer (die ist die Auftragsnummer)
+  const anm = 'Bestellung La Paulée de Berlin, 2. November 2026 · ' + (DELIV[d.type] || d.type);
+  // Kundenkommentar: Bemerkung des Kunden, abweichende Lieferanschrift, nicht lesbarer Wunschtermin
+  const note = cur.note !== undefined ? cur.note : p.note;
+  const address = cur.address !== undefined ? cur.address : d.address;
+  const komm = [note, address ? 'Lieferanschrift: ' + address : '',
+    wishRaw && !lief ? 'Wunschtermin: ' + wishRaw : ''].filter(String).join(' · ');
+  const ordNo = p.jtlNo || p.code;                // Auftragsnummer in JTL = Bestellnummer aus der Bestätigung
+  return p.items.map(i => [kdnr, anm, komm, lief, i.art, i.qty, 'Artikel', t.privilegePct || 0,
+    'Paulée 2026 · ' + i.n, i.wine, ordNo]);
 }
 
 /** Menü: Importdatei für alle Bestellungen mit JTL-Kundennummer, die noch nicht exportiert wurden. */
@@ -449,14 +462,15 @@ function jtlExport() {
       if (!row[ix('ID')] || row[ix('JTL-Export')]) continue;            // leer oder schon exportiert
       const kd = String(row[ix('JTL-Kundennr.')]).trim();
       if (!kd) { missing.push(row[ix('Bestellnr.')]); continue; }
-      take.push({ r: r + 1, kd, p: JSON.parse(row[ix('Daten')]) });
+      take.push({ r: r + 1, kd, p: JSON.parse(row[ix('Daten')]),
+        cur: { wish: row[ix('Wunschtermin')], note: String(row[ix('Bemerkung')] || ''), address: String(row[ix('Lieferanschrift (abweichend)')] || '') } });
     }
     if (!take.length) {
       return ui.alert('Keine neuen Bestellungen für den Export.' +
         (missing.length ? '\n\nOhne JTL-Kundennr. (' + missing.length + '): ' + missing.join(', ') : ''));
     }
     const lines = [JTL_COLS.map(csvCell).join(';')];
-    take.forEach(x => jtlRows(x.p, x.kd, test).forEach(r => lines.push(r.map(csvCell).join(';'))));
+    take.forEach(x => jtlRows(x.p, x.kd, x.cur).forEach(r => lines.push(r.map(csvCell).join(';'))));
     const csv = lines.join('\r\n') + '\r\n';
 
     const now = new Date();
