@@ -1,0 +1,16 @@
+{
+  "name": "La Paulée de Berlin 2026",
+  "short_name": "Paulée 2026",
+  "description": "Weinliste und Bestellung – La Paulée de Berlin, 2. November 2026",
+  "lang": "de",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#EBE7E0",
+  "theme_color": "#003B54",
+  "icons": [
+    { "src": "/img/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/img/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/img/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

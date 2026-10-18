@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>La Paulée de Berlin 2026 · Weinliste & Bestellung</title>
+<meta name="description" content="Digitale Weinliste und Bestellung – La Paulée de Berlin, Lundi 2 novembre 2026, Ambassade de France.">
+<meta name="theme-color" content="#003B54">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="/manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="/img/icon-192.png">
+<link rel="apple-touch-icon" href="/img/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Paulée 2026">
+<link rel="preload" href="/fonts/garamond-400.woff" as="font" type="font/woff" crossorigin>
+<link rel="preload" href="/fonts/inter-400.woff" as="font" type="font/woff" crossorigin>
+<link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+<div id="banner" class="banner" hidden></div>
+
+<header class="top">
+  <div class="top-row">
+    <a class="brand" href="#" data-action="home" aria-label="Zum Anfang">
+      <img src="/img/logo-gold.png" alt="La Paulée de Berlin" width="500" height="155">
+    </a>
+    <button class="mode" data-action="mode" aria-label="Preisansicht wechseln"><span id="modeLabel">Privatkunden</span></button>
+    <button class="cartbtn" data-action="cart" aria-label="Bestellung öffnen">
+      <span class="cartbtn-n" id="cartCount">0</span>
+      <span class="cartbtn-t" id="cartTotal">Bestellung</span>
+    </button>
+  </div>
+  <button id="pending" class="pending" data-action="orders" hidden></button>
+  <div class="tools">
+    <label class="search">
+      <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4.5 4.5"/></svg>
+      <input id="q" type="search" inputmode="search" placeholder="Tisch, Wein-Nr., Domaine, Rebsorte …" autocomplete="off" aria-label="Suche">
+    </label>
+    <nav class="rooms" id="rooms" aria-label="Räume">
+      <button data-room="" class="on">Alle</button>
+      <button data-room="S">Salon</button>
+      <button data-room="M">Salle à Manger</button>
+      <button data-room="E">Entrée</button>
+    </nav>
+    <div class="chips" id="chips" aria-label="Filter">
+      <button data-k="rouge"><i class="sym rouge"></i>rouge</button>
+      <button data-k="blanc"><i class="sym blanc"></i>blanc</button>
+      <button data-k="rose"><i class="sym rose"></i>rosé</button>
+      <button data-k="mousseux"><i class="sym mousseux"></i>effervescent</button>
+      <button data-k="doux"><i class="sym doux"></i>doux</button>
+      <button data-k="spiritueux"><i class="sym spiritueux"></i>spiritueux</button>
+      <button data-k="sans"><i class="sym sans"></i>0 %</button>
+      <button data-f="bio"><span class="bio">BIO</span></button>
+      <button data-f="rated">Bewertet</button>
+      <button data-f="cart">In der Bestellung</button>
+    </div>
+  </div>
+</header>
+
+<main id="list" class="list" aria-live="polite"></main>
+<p id="empty" class="empty" hidden>Keine Weine zu dieser Suche.</p>
+
+<footer class="foot" id="foot"></footer>
+
+<!-- Overlays -->
+<div id="sheet" class="sheet" hidden role="dialog" aria-modal="true" aria-labelledby="sheetTitle">
+  <div class="sheet-bg" data-action="close"></div>
+  <div class="sheet-panel">
+    <div class="sheet-head">
+      <button class="back" data-action="back" aria-label="Zurück" hidden>‹</button>
+      <h2 id="sheetTitle"></h2>
+      <button class="x" data-action="close" aria-label="Schließen">×</button>
+    </div>
+    <div class="sheet-body" id="sheetBody"></div>
+  </div>
+</div>
+
+<div id="toast" class="toast" role="status" hidden></div>
+
+<noscript><p class="empty">Bitte JavaScript aktivieren – oder am Infotisch in der Entrée mit dem Papierformular bestellen.</p></noscript>
+
+<script src="/config.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>
