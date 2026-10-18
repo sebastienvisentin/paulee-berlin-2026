@@ -1,7 +1,7 @@
 /* La Paulée de Berlin 2026 – Service Worker
    Speichert die komplette App beim ersten Öffnen; danach läuft alles ohne Empfang.
    VERSION und ASSETS werden von tools/stamp.py gesetzt. */
-const VERSION = '6c9c5f2290';
+const VERSION = '8515111137';
 const ASSETS = [
   "/",
   "/app.js",

@@ -2,13 +2,14 @@
    Nur diese Datei muss für den Betrieb angepasst werden. */
 window.PAULEE_CONFIG = {
   // Web-App-URL des Google Apps Script (Bestellannahme). Leer = Testbetrieb, nichts wird übertragen.
-  endpoint: '',
+  endpoint: 'https://script.google.com/macros/s/AKfycbwrW0xqrlg8TxM88KwweflcqfzGZx-nq2QFKtUOEAE-H5ncyN5KddsgwqBWzgrYYbjp/exec',
 
   // Bestellfenster (Berliner Zeit). Außerhalb: Liste ansehen und vormerken, aber nicht absenden.
   orderStart: '2026-11-02T00:00:00+01:00',
   orderEnd:   '2026-11-02T23:59:59+01:00',
 
-  // Vorschau: Bestellen jederzeit möglich, Hinweisband sichtbar. Vor dem 2.11. auf false setzen.
+  // Vorschau: Bestellen jederzeit möglich, Hinweisband sichtbar; Bestellungen landen in den Test-Blättern,
+  // Mails tragen [TEST]. Vor dem 2.11. auf false setzen.
   preview: true,
 
   privilegePct: 10,
