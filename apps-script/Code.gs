@@ -434,7 +434,7 @@ function jtlRows(p, kdnr, cur) {
   const wishRaw = cur.wish !== undefined && cur.wish !== '' ? cur.wish : d.wish;
   const lief = wishDate(wishRaw);
   // Anmerkung erscheint auf dem Auftrag beim Kunden: kurz, ohne Bestellnummer (die ist die Auftragsnummer)
-  const anm = 'Bestellung La Paulée de Berlin, 2. November 2026 · ' + (DELIV[d.type] || d.type);
+  const anm = 'Paulée 2026 · ' + (DELIV[d.type] || d.type);
   // Kundenkommentar: Bemerkung des Kunden, abweichende Lieferanschrift, nicht lesbarer Wunschtermin
   const note = cur.note !== undefined ? cur.note : p.note;
   const address = cur.address !== undefined ? cur.address : d.address;
