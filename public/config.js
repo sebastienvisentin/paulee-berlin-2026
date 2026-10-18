@@ -12,6 +12,7 @@ window.PAULEE_CONFIG = {
   preview: true,
 
   privilegePct: 10,
+  vatPct: 19,          // Wein, Spirituosen, alkoholfreie Getränke und Versand: 19 %
   // Versand Privatkunden: frei ab (Listenpreis vor Privilège), sonst je angefangene 12 Flaschen
   b2cFreeFrom: 180, b2cParcel: 8.90, b2cParcelSize: 12,
   // Versand Gastronomie & Fachhandel: frei ab (netto, vor Privilège), sonst je Flasche, mindestens

@@ -116,7 +116,11 @@ function totals(deliv = S.deliv) {
     if (S.mode === 'c') ship = sub >= cents(C.b2cFreeFrom) ? 0 : Math.ceil(bottles / C.b2cParcelSize) * cents(C.b2cParcel);
     else ship = sub >= cents(C.b2bFreeFrom) ? 0 : Math.max(cents(C.b2bMin), bottles * cents(C.b2bPerBottle));
   }
-  return { lines, sub, disc, goods, ship, total: goods + ship, bottles };
+  const total = goods + ship, rate = C.vatPct || 19;
+  // B2C: enthaltene MwSt. · B2B: MwSt. auf die Nettosumme
+  const vat = S.mode === 'c' ? total - Math.round(total / (1 + rate / 100)) : Math.round(total * rate / 100);
+  const gross = S.mode === 'c' ? total : total + vat;
+  return { lines, sub, disc, goods, ship, total, vat, gross, bottles };
 }
 
 /* ---------- Weinliste ---------- */
@@ -130,7 +134,7 @@ function rateHtml(n) {
 function qtyHtml(n) {
   const q = S.cart[n] || 0;
   return `<div class="qty${q ? '' : ' zero'}"><button class="minus" data-q="-1" aria-label="Eine Flasche weniger">−</button>` +
-         `<output>${q}</output><button class="plus" data-q="1" aria-label="Eine Flasche mehr">${q ? '+' : '+ Fl.'}</button></div>`;
+         `<input class="qn" type="number" inputmode="numeric" min="0" max="999" value="${q}" aria-label="Anzahl Flaschen"><button class="plus" data-q="1" aria-label="Eine Flasche mehr">${q ? '+' : '+ Fl.'}</button></div>`;
 }
 
 function wineHtml(w) {
@@ -307,7 +311,10 @@ function orderText(p) {
   const t = p.totals;
   L.push('', `Zwischensumme: ${money(t.subCents)}`, `Privilège Paulée –${C.privilegePct} %: –${money(t.discCents)}`,
     `${DELIV[p.delivery.type][0]}: ${t.shipCents ? money(t.shipCents) : 'kostenfrei'}`,
-    `Summe: ${money(t.totalCents)} ${p.mode === 'B2B' ? 'zzgl. MwSt.' : 'inkl. MwSt.'}`, '');
+    ...(p.mode === 'B2B'
+      ? [`Summe netto: ${money(t.totalCents)}`, `zzgl. ${t.vatPct} % MwSt.: ${money(t.vatCents)}`, `Gesamtbetrag brutto: ${money(t.grossCents)}`]
+      : [`Summe: ${money(t.totalCents)} (darin ${t.vatPct} % MwSt.: ${money(t.vatCents)})`]), '');
+  if (p.mode === 'B2B') L.push('Bestellung zu Konditionen für Gastronomie & Fachhandel (gewerblicher Kunde bestätigt).', '');
   const c = p.customer;
   for (const [k, v] of Object.entries(c)) if (v) L.push(`${FIELD_LABEL[k] || k}: ${v}`);
   if (p.delivery.address) L.push(`Lieferanschrift: ${p.delivery.address}`);
@@ -351,13 +358,19 @@ function openView(view, arg, keepScroll) {
   body.innerHTML = html;
   $('.back', sheet()).hidden = !back;
   $('.back', sheet()).dataset.to = back || '';
-  if (sheet().hidden) { sheet().hidden = false; document.body.style.overflow = 'hidden'; }
+  if (sheet().hidden) {
+    sheet().hidden = false; document.body.style.overflow = 'hidden';
+    try { history.pushState({ pbSheet: 1 }, ''); } catch {}
+  }
   body.scrollTop = keepScroll ? top : 0;
   AFTER[view]?.(arg);
 }
-function closeView() {
+let popGuard = false;
+function closeView(fromPop) {
+  if (sheet().hidden) return;
   if (S.view === 'welcome') store.set(LS.seen, 1);
   sheet().hidden = true; S.view = null;
+  if (!fromPop && history.state && history.state.pbSheet) { popGuard = true; history.back(); }
   document.body.style.overflow = '';
   if (S.reloadPending) location.reload();
 }
@@ -385,7 +398,7 @@ const VIEWS = {
     return ['Preisansicht', `
       <div class="opts">
         <label class="opt"><input type="radio" name="m" value="c"${S.mode === 'c' ? ' checked' : ''}><span><b>Privatkunden</b><small>Preise je Flasche inkl. MwSt.</small></span></label>
-        <label class="opt"><input type="radio" name="m" value="b"${S.mode === 'b' ? ' checked' : ''}><span><b>Gastronomie & Fachhandel</b><small>Nettopreise zzgl. MwSt. – mit B2B-Code</small></span></label>
+        <label class="opt"><input type="radio" name="m" value="b"${S.mode === 'b' ? ' checked' : ''}><span><b>Gastronomie & Fachhandel</b><small>Nettopreise zzgl. MwSt. – nur für gewerbliche Kunden, mit B2B-Code</small></span></label>
       </div>
       <div id="codeBox"${S.mode === 'b' ? ' hidden' : ' hidden'}>${codeFormHtml()}</div>`];
   },
@@ -445,10 +458,11 @@ const VIEWS = {
         <label class="check" id="c-agb"><input type="checkbox" id="f-agb"><span>Ich akzeptiere die <a href="https://www.weine-visentin.de/AGB" target="_blank" rel="noopener">AGB</a> und habe die <a href="https://www.weine-visentin.de/Widerrufsrecht" target="_blank" rel="noopener">Widerrufsbelehrung</a> zur Kenntnis genommen. <i class="req">*</i></span></label>
         <p class="legal">Abgabe alkoholischer Getränke nur an Volljährige. Verbraucher können ihre Bestellung binnen 14 Tagen ab Erhalt der Ware ohne Angabe von Gründen widerrufen. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung, für den Newsletter nur mit Ihrer Zustimmung – <a href="https://www.weine-visentin.de/Datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</p>`;
     } else {
-      h += `<p class="legal">Alle Preise netto zzgl. gesetzlicher MwSt. Es gelten unsere <a href="https://www.weine-visentin.de/AGB" target="_blank" rel="noopener">AGB für Geschäftskunden</a>. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung – <a href="https://www.weine-visentin.de/Datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</p>`;
+      h += `<label class="check" id="c-pro"><input type="checkbox" id="f-pro"><span>Ich bestelle als Unternehmer für Gastronomie oder Fachhandel. Die Nettopreise gelten ausschließlich für gewerbliche Kunden. <i class="req">*</i></span></label>
+        <p class="legal">Alle Preise netto zzgl. gesetzlicher MwSt. Es gelten unsere <a href="https://www.weine-visentin.de/AGB" target="_blank" rel="noopener">AGB für Geschäftskunden</a>. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung – <a href="https://www.weine-visentin.de/Datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</p>`;
     }
     h += `<p class="err" id="formErr" hidden></p>
-      <div class="submit"><button class="btn stack" data-action="submit">${S.mode === 'c' ? 'Zahlungspflichtig bestellen' : 'Verbindlich bestellen'}<small>${money(t.total)} ${S.mode === 'c' ? 'inkl. MwSt.' : 'zzgl. MwSt.'}</small></button></div>`;
+      <div class="submit"><button class="btn stack" data-action="submit">${S.mode === 'c' ? 'Zahlungspflichtig bestellen' : 'Verbindlich bestellen'}<small>${S.mode === 'c' ? money(t.total) + ' inkl. MwSt.' : money(t.total) + ' netto · ' + money(t.gross) + ' brutto'}</small></button></div>`;
     return ['Ihre Angaben', h, 'cart'];
   },
   done(id) {
@@ -458,7 +472,7 @@ const VIEWS = {
     let h = `<div class="done"><div class="mark${sent ? '' : ' wait'}">${sent ? '✓' : '…'}</div>
       <h3>Merci${p.customer.name ? ', ' + esc(p.customer.name.split(' ')[0]) : ''}.</h3>
       <p>Ihre Bestellnummer</p><div class="no">${p.code}</div>
-      <p style="color:var(--muted);font-size:13px">${fl(p.items.reduce((a, i) => a + i.qty, 0))} · ${money(p.totals.totalCents)} ${p.mode === 'B2B' ? 'zzgl. MwSt.' : 'inkl. MwSt.'}</p>`;
+      <p style="color:var(--muted);font-size:13px">${fl(p.items.reduce((a, i) => a + i.qty, 0))} · ${p.mode === 'B2B' ? money(p.totals.totalCents) + ' netto · ' + money(p.totals.grossCents) + ' brutto' : money(p.totals.totalCents) + ' inkl. MwSt.'}</p>`;
     if (sent) {
       h += `<p>Ihre Bestellung ist bei uns eingegangen. Sie erhalten eine Bestätigung an <b>${esc(p.customer.mail)}</b>; wegen ${p.delivery.type === 'lieferung' ? 'der Lieferung' : 'der Abholung'} melden wir uns bei Ihnen.</p>`;
     } else if (test) {
@@ -491,7 +505,7 @@ const VIEWS = {
 };
 
 function codeFormHtml() {
-  return `<p class="hint" style="text-align:left;margin-top:16px">B2B-Code – steht auf Ihrem Bestellformular und in unserer E-Mail an Sie.</p>
+  return `<p class="hint" style="text-align:left;margin-top:16px">Die Nettopreise gelten <b>ausschließlich für Kunden aus Gastronomie und Fachhandel</b>. Ihren B2B-Code finden Sie auf dem B2B-Bestellformular und in unserer E-Mail an Sie.</p>
     <form class="code" data-form="code"><input id="codeIn" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="B2B-Code" aria-label="B2B-Code">
     <button class="btn b small" style="width:auto">Freischalten</button></form><p class="err" id="codeErr" hidden></p>`;
 }
@@ -508,7 +522,12 @@ function sumHtml(t, compact) {
     <div><span>Zwischensumme</span><span>${money(t.sub)}</span></div>
     <div class="p"><span>Privilège Paulée –${C.privilegePct} %</span><span>–${money(t.disc)}</span></div>
     <div><span>${S.deliv === 'lieferung' ? 'Versand' : 'Abholung'}</span><span>${t.ship ? money(t.ship) : 'kostenfrei'}</span></div>
-    <div class="t"><span>Summe</span><span>${money(t.total)}</span></div>
+    ${S.mode === 'c'
+      ? `<div class="t"><span>Summe</span><span>${money(t.total)}</span></div>
+         <div class="v"><span>darin enthalten ${C.vatPct} % MwSt.</span><span>${money(t.vat)}</span></div>`
+      : `<div class="tn"><span>Summe netto</span><span>${money(t.total)}</span></div>
+         <div class="v"><span>zzgl. ${C.vatPct} % MwSt.</span><span>${money(t.vat)}</span></div>
+         <div class="t"><span>Gesamtbetrag brutto</span><span>${money(t.gross)}</span></div>`}
     <div class="n"><span>${vat}${compact ? '' : ' ' + shipNote}</span></div></div>`;
 }
 
@@ -526,9 +545,7 @@ const AFTER = {
     }));
   },
   form() {
-    const body = $('#sheetBody');
-    body.addEventListener('input', saveForm);
-    body.addEventListener('change', saveForm);
+    // Eingabe-Listener für das Formular sind in bind() einmalig registriert
     const la = $('#f-la');
     la?.addEventListener('change', () => { $('#laBox').hidden = !la.checked; });
   }
@@ -548,7 +565,9 @@ function saveForm() {
   store.set(LS.form, all);
 }
 
+let lastSubmit = 0;
 function submitOrder() {
+  if (Date.now() - lastSubmit < 2000) return;
   const v = readForm();
   let bad = null;
   for (const [k, , req, , , type] of FIELDS[S.mode]) {
@@ -557,7 +576,7 @@ function submitOrder() {
     wrap.classList.toggle('bad', !ok);
     if (!ok && !bad) bad = el;
   }
-  const checks = S.mode === 'c' ? ['adult', 'agb'] : [];
+  const checks = S.mode === 'c' ? ['adult', 'agb'] : ['pro'];
   for (const c of checks) {
     const ok = $('#f-' + c).checked;
     $('#c-' + c).classList.toggle('bad', !ok);
@@ -575,6 +594,7 @@ function submitOrder() {
   const t = totals();
   if (!t.lines.length) { openView('cart'); return; }
 
+  lastSubmit = Date.now();
   const customer = {};
   for (const [k] of FIELDS[S.mode]) customer[k] = v[k] || '';
   const address = S.deliv === 'lieferung' && v.la
@@ -589,7 +609,9 @@ function submitOrder() {
     newsletter: S.mode === 'c' ? !!v.nl : false,
     note: v.note || '',
     items: t.lines.map(l => ({ n: l.w.n, art: l.w.a, wine: l.w.w, domaine: l.w.d, unit: l.w.u, qty: l.q, priceCents: l.pc, lineCents: l.lc })),
-    totals: { subCents: t.sub, discCents: t.disc, shipCents: t.ship, totalCents: t.total, bottles: t.bottles, vat: S.mode === 'b' ? 'netto' : 'brutto', privilegePct: C.privilegePct }
+    totals: { subCents: t.sub, discCents: t.disc, shipCents: t.ship, totalCents: t.total, vatCents: t.vat, grossCents: t.gross, vatPct: C.vatPct,
+              bottles: t.bottles, basis: S.mode === 'b' ? 'netto' : 'brutto', privilegePct: C.privilegePct },
+    businessConfirmed: S.mode === 'b'
   };
   saveOrder({ id, status: 'pending', payload });
   S.cart = {}; store.set(LS.cart, S.cart);
@@ -715,6 +737,28 @@ function bind() {
     applyFilter(); window.scrollTo({ top: 0 });
   });
 
+  // Formular: speichern und Markierungen entfernen (nur in der Formularansicht)
+  const body = $('#sheetBody');
+  const onForm = e => {
+    if (S.view !== 'form') return;
+    saveForm();
+    const w = e.target.closest('.fld, .check');
+    if (w && w.classList.contains('bad') && (e.target.type === 'checkbox' ? e.target.checked : e.target.value.trim())) w.classList.remove('bad');
+    const err = $('#formErr');
+    if (err && !$('#sheetBody .bad')) err.hidden = true;
+  };
+  body.addEventListener('input', onForm);
+  body.addEventListener('change', onForm);
+  window.addEventListener('popstate', () => {
+    if (popGuard) { popGuard = false; return; }
+    if (!sheet().hidden) closeView(true);
+  });
+  document.addEventListener('change', e => {
+    if (!e.target.classList?.contains('qn')) return;
+    const n = e.target.closest('[data-n]').dataset.n;
+    setQty(n, parseInt(e.target.value, 10) || 0);
+    if (S.view === 'cart') openView('cart', null, true);
+  });
   window.addEventListener('online', flush);
   document.addEventListener('visibilitychange', () => { if (!document.hidden) flush(); });
   setInterval(() => { if (!document.hidden) flush(); }, 30000);
