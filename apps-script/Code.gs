@@ -434,7 +434,14 @@ function jtlRows(p, kdnr, cur) {
   const wishRaw = cur.wish !== undefined && cur.wish !== '' ? cur.wish : d.wish;
   const lief = wishDate(wishRaw);
   // Anmerkung erscheint auf dem Auftrag beim Kunden: kurz, ohne Bestellnummer (die ist die Auftragsnummer)
-  const anm = 'Paulée 2026 · ' + (DELIV[d.type] || d.type);
+  // Lieferung: Versandkosten aus der Tabelle (vom Team korrigierbar), sonst aus der Bestellung
+  let anm = 'Paulée 2026 · ' + (DELIV[d.type] || d.type);
+  if (d.type === 'lieferung') {
+    const ship = typeof cur.ship === 'number' ? Math.round(cur.ship * 100) : (t.shipCents || 0);
+    anm += ship > 0
+      ? ' · Versandkosten ' + money(ship) + (p.mode === 'B2B' ? ' zzgl. MwSt.' : '')
+      : ' · versandkostenfrei';
+  }
   // Kundenkommentar: Bemerkung des Kunden, abweichende Lieferanschrift, nicht lesbarer Wunschtermin
   const note = cur.note !== undefined ? cur.note : p.note;
   const address = cur.address !== undefined ? cur.address : d.address;
@@ -463,7 +470,7 @@ function jtlExport() {
       const kd = String(row[ix('JTL-Kundennr.')]).trim();
       if (!kd) { missing.push(row[ix('Bestellnr.')]); continue; }
       take.push({ r: r + 1, kd, p: JSON.parse(row[ix('Daten')]),
-        cur: { wish: row[ix('Wunschtermin')], note: String(row[ix('Bemerkung')] || ''), address: String(row[ix('Lieferanschrift (abweichend)')] || '') } });
+        cur: { ship: row[ix('Versand')], wish: row[ix('Wunschtermin')], note: String(row[ix('Bemerkung')] || ''), address: String(row[ix('Lieferanschrift (abweichend)')] || '') } });
     }
     if (!take.length) {
       return ui.alert('Keine neuen Bestellungen für den Export.' +
