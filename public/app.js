@@ -43,6 +43,7 @@ const TXT = {
     rateAria: 'Ihre Bewertung', of5: i => `${i} von 5`, less: 'Eine Flasche weniger', more: 'Eine Flasche mehr', qtyAria: 'Anzahl Flaschen',
     modeC: 'Privatkunden', modeB: 'Gastronomie',
     order: 'Bestellung', yourOrder: 'Ihre Bestellung',
+    sentBtn: n => n === 1 ? 'Bestellt' : n + ' Bestellungen', tabSel: n => 'Auswahl' + (n ? ' · ' + n + ' Fl.' : ''), tabSent: n => `Bestellt (${n})`,
     searchPh: 'Tischnummer (z. B. 128), Wein oder Domaine', searchAria: 'Suche', tbl: 'Tisch-Nr.',
     all: 'Alle', rated: 'Bewertet', inCart: 'In der Bestellung',
     emptyCart: 'Noch keine Weine in Ihrer Bestellung.', emptyFilter: 'Keine Weine zu dieser Auswahl.',
@@ -133,6 +134,7 @@ const TXT = {
     rateAria: 'Your rating', of5: i => `${i} of 5`, less: 'One bottle less', more: 'One bottle more', qtyAria: 'Number of bottles',
     modeC: 'Private', modeB: 'Trade',
     order: 'Order', yourOrder: 'Your order',
+    sentBtn: n => n === 1 ? 'Ordered' : n + ' orders', tabSel: n => 'Selection' + (n ? ' · ' + n + ' btl.' : ''), tabSent: n => `Ordered (${n})`,
     searchPh: 'Table number (e.g. 128), wine or domaine', searchAria: 'Search', tbl: 'Table no.',
     all: 'All', rated: 'Rated', inCart: 'In my order',
     emptyCart: 'No wines in your order yet.', emptyFilter: 'No wines match this selection.',
@@ -449,8 +451,9 @@ function setQty(n, q) {
 
 function updateCart(bump) {
   const t = totals();
-  $('#cartCount').textContent = t.bottles;
-  $('#cartTotal').textContent = t.bottles ? money(t.goods) : T().order;
+  const sent = orders().length, showSent = !t.bottles && sent > 0;
+  $('#cartCount').textContent = showSent ? '✓' : t.bottles;
+  $('#cartTotal').textContent = t.bottles ? money(t.goods) : showSent ? T().sentBtn(sent) : T().order;
   if (bump) { const b = $('.cartbtn'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
 }
 
@@ -464,7 +467,7 @@ function saveOrder(o) {
 }
 
 function shortCode() {
-  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(5));
+  const A = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789', r = crypto.getRandomValues(new Uint8Array(6));
   return 'P-' + [...r].map(x => A[x % A.length]).join('');
 }
 function uuid() {
@@ -622,6 +625,15 @@ const langHtml = () => `<div class="lang" role="group" aria-label="Sprache / Lan
   `<button data-lang="de" class="${LANG === 'de' ? 'on' : ''}">Deutsch</button><button data-lang="en" class="${LANG === 'en' ? 'on' : ''}">English</button></div>`;
 const stepsHtml = () => `<ol class="steps">${T().steps.map(([a, b], i) => `<li><span class="n">${i + 1}</span><span><b>${a}</b>${b}</span></li>`).join('')}</ol>`;
 
+// Umschalter Auswahl ↔ abgeschickte Bestellungen (nur wenn es abgeschickte gibt)
+function segHtml(active) {
+  const n = orders().length;
+  if (!n) return '';
+  const b = totals().bottles, t = T();
+  return `<div class="seg" role="tablist"><button data-action="cartview" class="${active === 'cart' ? 'on' : ''}" role="tab">${t.tabSel(b)}</button>` +
+         `<button data-action="orders" class="${active === 'orders' ? 'on' : ''}" role="tab">${t.tabSent(n)}</button></div>`;
+}
+
 const VIEWS = {
   welcome() {
     const t = T();
@@ -655,12 +667,12 @@ const VIEWS = {
   cart() {
     const t = T(), tot = totals();
     if (!tot.lines.length) {
-      return [t.yourOrder, `<p class="empty" style="margin:20px 0">${t.noWines}</p>
+      return [t.yourOrder, `${segHtml('cart')}<p class="empty" style="margin:20px 0">${t.noWines}</p>
         <p class="hint" style="text-align:center">${t.tapAdd}</p>
         <button class="btn ghost" data-action="close" style="margin-top:20px">${t.toList}</button>`];
     }
     const ws = windowState();
-    let h = '<div class="lines">';
+    let h = segHtml('cart') + '<div class="lines">';
     for (const l of tot.lines) {
       h += `<div class="line" data-n="${l.w.n}"><div><div class="line-t">${esc(l.w.w)}</div>` +
            `<div class="line-s">${l.w.n} · ${esc(l.w.d)} · ${money(l.pc)}</div></div>` +
@@ -745,7 +757,7 @@ const VIEWS = {
   orders() {
     const t = T(), list = orders().slice().reverse();
     if (!list.length) return [t.ordersTitle, `<p class="empty">${t.noOrders}</p>`];
-    let h = '<div class="orders">';
+    let h = segHtml('orders') + '<div class="orders">';
     for (const o of list) {
       const p = o.payload;
       const pill = o.status === 'sent' ? `<span class="pill">${t.pillSent}</span>`
@@ -964,7 +976,8 @@ function bind() {
         q.setAttribute('inputmode', 'numeric'); q.value = ''; S.q = ''; applyFilter(); q.focus();
         break;
       }
-      case 'cart': openView('cart'); break;
+      case 'cart': openView(!totals().bottles && orders().length ? 'orders' : 'cart'); break;
+      case 'cartview': openView('cart'); break;
       case 'mode': openView('mode'); break;
       case 'help': openView('help'); break;
       case 'orders': openView('orders'); break;

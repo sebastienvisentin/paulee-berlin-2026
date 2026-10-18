@@ -18,8 +18,7 @@ const CFG = {
   deadline: new Date('2026-11-02T23:59:59+01:00'),
   phone: '+49 30 695 199 20',
   web: 'https://www.weine-visentin.de/',
-  csvCharset: 'UTF-8',                          // falls Umlaute in der Ameise falsch erscheinen: 'windows-1252'
-  orderPrefix: 'PAULEE-'                        // Bestellnummer Paulée in der Importdatei (z. B. PAULEE-7K3FQ)
+  csvCharset: 'UTF-8'                           // falls Umlaute in der Ameise falsch erscheinen: 'windows-1252'
 };
 
 const SHEETS = {
@@ -34,7 +33,7 @@ const ORDER_COLS = ['Eingang', 'Bestellnr.', 'JTL-Kundennr.', 'JTL-Export', 'In 
   'Bestellt am (Gerät)', 'Hinweis', 'Bestätigungsmail', 'ID', 'Daten'];
 // Spalten der Importdatei für JTL-Ameise (Verkauf → Aufträge), eine Zeile je Position
 const JTL_COLS = ['Kundennummer', 'Anmerkung', 'Voraus. Lieferdatum', 'Artikelnummer', 'Menge', 'Positionsart',
-  'Rabatt (%)', 'Hinweis (Position)', 'Artikelname', 'VK Netto', 'Bestellnummer Paulée'];
+  'Rabatt (%)', 'Hinweis (Position)', 'Artikelname', 'VK Netto', 'Auftragsnummer'];
 const ITEM_COLS = ['Bestellnr.', 'Typ', 'Kunde', 'Wein-Nr.', 'ART. NR.', 'Wein', 'Domaine', 'Einheit', 'Menge',
   'Einzelpreis', 'Summe', 'ID'];
 const COL = name => ORDER_COLS.indexOf(name) + 1;
@@ -57,6 +56,9 @@ function doPost(e) {
     const sh = sheet(ss, test ? SHEETS.testOrders : SHEETS.orders, ORDER_COLS);
     const shI = sheet(ss, test ? SHEETS.testItems : SHEETS.items, ITEM_COLS);
     if (findRow(sh, p.id)) return json({ ok: true, duplicate: true });   // schon da: nichts doppelt anlegen
+    // Die Bestellnummer wird JTL-Auftragsnummer und muss eindeutig sein (Zufallscode – sehr selten doppelt)
+    const same = countCode(sh, p.code);
+    if (same) p.jtlNo = p.code + '-' + (same + 1);
     row = appendOrder(sh, shI, p, test);
   } finally {
     lock.releaseLock();
@@ -75,7 +77,7 @@ function doGet() {
 function validate(p) {
   if (!p || typeof p !== 'object') return 'no payload';
   if (!/^[0-9a-f-]{36}$/i.test(p.id || '')) return 'bad id';
-  if (!/^P-[A-Z0-9]{5}$/.test(p.code || '')) return 'bad code';
+  if (!/^P-[A-Z0-9]{5,6}$/.test(p.code || '')) return 'bad code';
   if (p.mode !== 'B2C' && p.mode !== 'B2B') return 'bad mode';
   if (!Array.isArray(p.items) || !p.items.length || p.items.length > 300) return 'bad items';
   for (const i of p.items) if (!(i.qty >= 1 && i.qty <= 999)) return 'bad qty';
@@ -91,24 +93,26 @@ function notes(p, test) {
   if (created > CFG.deadline) n.push('Bestellzeit nach 23:59 Uhr');
   const sub = p.items.reduce((a, i) => a + i.priceCents * i.qty, 0);
   if (sub !== p.totals.subCents) n.push('Summenprüfung abweichend');
+  if (p.jtlNo) n.push('Bestellnr. doppelt vergeben – JTL-Auftragsnummer ' + p.jtlNo);
   return n.join(' · ');
 }
 
 /* ---------------- Tabelle ---------------- */
 
 function sheet(ss, name, cols) {
-  let sh = ss.getSheetByName(name);
+  let sh = ss.getSheetByName(name), old = null;
   if (sh) {
     const head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].filter(String);
     if (head.join('|') === cols.join('|')) return sh;
-    if (sh.getLastRow() > 1) {                    // ältere Spaltenfolge mit Daten: aufheben, neu anlegen
-      sh.setName(name + ' (alt ' + Utilities.formatDate(new Date(), 'Europe/Berlin', 'dd.MM. HH:mm') + ')');
+    if (sh.getLastRow() > 1) {                    // ältere Spaltenfolge mit Daten: aufheben, neu anlegen, Daten übernehmen
+      old = sh;
+      old.setName(name + ' (alt ' + Utilities.formatDate(new Date(), 'Europe/Berlin', 'dd.MM. HH:mm') + ')');
       sh = null;
     } else {
       sh.clear();
     }
   }
-  if (!sh) sh = ss.insertSheet(name);
+  if (!sh) sh = ss.insertSheet(name, old ? old.getIndex() - 1 : ss.getNumSheets());
   sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold').setBackground('#EBE7E0');
   sh.setFrozenRows(1);
   const k = cols.indexOf('JTL-Kundennr.');
@@ -116,7 +120,31 @@ function sheet(ss, name, cols) {
     sh.getRange(1, k + 1).setBackground('#F3D9A4').setNote('Vom Team auszufüllen: Kundennummer aus JTL-Wawi. Erst dann wird die Bestellung in die JTL-Importdatei übernommen.');
     sh.getRange(2, k + 1, sh.getMaxRows() - 1, 1).setBackground('#FBF3E2');
   }
+  if (old && cols === ORDER_COLS) migrateOrders(old, sh, name.indexOf('Test') === 0);
   return sh;
+}
+
+/** Bestellungen aus einem Blatt mit älterer Spaltenfolge übernehmen (Grundlage: Spalte „Daten“). */
+function migrateOrders(old, sh, test) {
+  const H = headers(old), data = old.getDataRange().getValues();
+  const keep = ['Eingang', 'JTL-Kundennr.', 'JTL-Export', 'In JTL erfasst', 'Hinweis', 'Bestätigungsmail'];
+  const rows = [];
+  for (let r = 1; r < data.length; r++) {
+    const raw = H['Daten'] ? data[r][H['Daten'] - 1] : '';
+    if (!raw) continue;
+    const v = orderValues(JSON.parse(raw), test);
+    keep.forEach(k => { if (H[k]) v[k] = data[r][H[k] - 1]; });
+    rows.push(ORDER_COLS.map(k => v[k]));
+  }
+  if (!rows.length) return;
+  sh.getRange(2, 1, rows.length, ORDER_COLS.length).setValues(rows);
+  formatOrderRows(sh, 2, rows.length);
+}
+
+function countCode(sh, code) {
+  const last = sh.getLastRow();
+  if (last < 2) return 0;
+  return sh.getRange(2, COL('Bestellnr.'), last - 1, 1).getValues().filter(r => r[0] === code).length;
 }
 
 function findRow(sh, id) {
@@ -140,10 +168,10 @@ const splitName = c => {                          // ältere App-Fassung schickt
   return [parts.join(' '), last];
 };
 
-function appendOrder(sh, shI, p, test) {
+function orderValues(p, test) {
   const c = p.customer, t = p.totals, d = p.delivery || {};
   const [vor, nach] = splitName(c);
-  const v = {
+  return {
     'Eingang': new Date(), 'Bestellnr.': p.code, 'JTL-Kundennr.': '', 'JTL-Export': '', 'In JTL erfasst': false,
     'Typ': p.mode, 'Sprache': (p.lang || 'de').toUpperCase(), 'Firma': txt(c.firma), 'Vorname': txt(vor), 'Nachname': txt(nach),
     'E-Mail': txt(c.mail), 'Telefon': txt(c.tel), 'Kundennr. (Angabe Kunde)': txt(c.kdnr), 'USt-IdNr.': txt(c.ustid),
@@ -155,14 +183,22 @@ function appendOrder(sh, shI, p, test) {
     'Bestellt am (Gerät)': new Date(p.createdAt), 'Hinweis': notes(p, test), 'Bestätigungsmail': 'wird gesendet …',
     'ID': p.id, 'Daten': JSON.stringify(p)
   };
-  sh.appendRow(ORDER_COLS.map(k => v[k]));
-  const row = sh.getLastRow();
-  sh.getRange(row, COL('In JTL erfasst')).insertCheckboxes();
-  sh.getRange(row, COL('Zwischensumme'), 1, 6).setNumberFormat('#,##0.00 €');
-  sh.getRange(row, COL('Eingang')).setNumberFormat('dd.MM.yyyy HH:mm');
-  sh.getRange(row, COL('Bestellt am (Gerät)')).setNumberFormat('dd.MM.yyyy HH:mm');
-  sh.getRange(row, COL('Wunschtermin')).setNumberFormat('dd.MM.yyyy');
+}
 
+function formatOrderRows(sh, row, n) {
+  sh.getRange(row, COL('In JTL erfasst'), n, 1).insertCheckboxes();
+  sh.getRange(row, COL('Zwischensumme'), n, 6).setNumberFormat('#,##0.00 €');
+  sh.getRange(row, COL('Eingang'), n, 1).setNumberFormat('dd.MM.yyyy HH:mm');
+  sh.getRange(row, COL('Bestellt am (Gerät)'), n, 1).setNumberFormat('dd.MM.yyyy HH:mm');
+  sh.getRange(row, COL('Wunschtermin'), n, 1).setNumberFormat('dd.MM.yyyy');
+}
+
+function appendOrder(sh, shI, p, test) {
+  sh.appendRow(ORDER_COLS.map(k => orderValues(p, test)[k]));
+  const row = sh.getLastRow();
+  formatOrderRows(sh, row, 1);
+
+  const c = p.customer;
   const name = fullName(c);
   const kunde = c.firma ? c.firma + ' – ' + name : name;
   const rows = p.items.map(i => [p.code, p.mode, txt(kunde), i.n, i.art, i.wine, i.domaine, i.unit, i.qty,
@@ -309,10 +345,12 @@ function einrichten() {
   const ss = SpreadsheetApp.getActive();
   sheet(ss, SHEETS.orders, ORDER_COLS);
   sheet(ss, SHEETS.items, ITEM_COLS);
+  sheet(ss, SHEETS.testOrders, ORDER_COLS);
+  sheet(ss, SHEETS.testItems, ITEM_COLS);
   const first = ss.getSheetByName('Tabellenblatt1') || ss.getSheetByName('Sheet1');
   if (first && first.getLastRow() === 0) ss.deleteSheet(first);
   const key = PropertiesService.getScriptProperties().getProperty('BREVO_API_KEY');
-  let msg = 'Blätter „Bestellungen“ und „Positionen“ sind angelegt.\n';
+  let msg = 'Blätter „Bestellungen“, „Positionen“ und die Test-Blätter sind eingerichtet.\n';
   if (!key) {
     msg += 'ACHTUNG: BREVO_API_KEY fehlt (Projekteinstellungen → Skripteigenschaften).';
   } else {
@@ -374,7 +412,7 @@ const deNum = (x, dec) => x.toFixed(dec).replace('.', ',');
 /** Zeilen der Importdatei für eine Bestellung: je Wein eine Artikelposition, dazu ggf. eine Versandposition. */
 function jtlRows(p, kdnr, test) {
   const d = p.delivery || {}, t = p.totals;
-  const ordNo = (test ? 'TEST-' : CFG.orderPrefix) + String(p.code).replace(/^P-/, '');
+  const ordNo = p.jtlNo || p.code;                // Auftragsnummer in JTL = Bestellnummer aus der Bestätigung
   const deliv = DELIV[d.type] || d.type;
   const anm = ['Paulée 2026 · ' + p.code,
     p.mode === 'B2B' ? 'Gastronomie & Fachhandel' : 'Privatkunde',
