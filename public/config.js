@@ -10,7 +10,7 @@ window.PAULEE_CONFIG = {
 
   // Vorschau: Bestellen jederzeit möglich, Hinweisband sichtbar; Bestellungen landen in den Test-Blättern,
   // Mails tragen [TEST]. Vor dem 2.11. auf false setzen.
-  preview: true,
+  preview: false,
 
   privilegePct: 10,
   vatPct: 19,          // Wein, Spirituosen, alkoholfreie Getränke und Versand: 19 %
