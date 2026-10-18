@@ -29,7 +29,7 @@ const SHEETS = {
 const ORDER_COLS = ['Eingang', 'Bestellnr.', 'JTL-Kundennr.', 'JTL-Export', 'In JTL erfasst', 'Typ', 'Sprache',
   'Firma', 'Vorname', 'Nachname', 'E-Mail', 'Telefon', 'Kundennr. (Angabe Kunde)', 'USt-IdNr.', 'Straße', 'PLZ', 'Ort',
   'Lieferart', 'Lieferanschrift (abweichend)', 'Wunschtermin', 'Bemerkung', 'Flaschen', 'Zwischensumme', 'Privilège',
-  'Versand', 'Summe (B2B netto / B2C brutto)', 'MwSt.', 'Gesamt brutto', 'Newsletter', 'Gastro/Fachhandel bestätigt',
+  'Versand', 'Gesamt netto', 'MwSt.', 'Gesamt brutto', 'Newsletter', 'Gastro/Fachhandel bestätigt',
   'Bestellt am (Gerät)', 'Hinweis', 'Bestätigungsmail', 'ID', 'Daten'];
 // Spalten der Importdatei für JTL-Ameise (Verkauf → Aufträge), eine Zeile je Position
 const JTL_COLS = ['Kundennummer', 'Anmerkung', 'Kundenkommentar', 'Voraus. Lieferdatum', 'Artikelnummer', 'Menge',
@@ -104,6 +104,10 @@ function sheet(ss, name, cols) {
   if (sh) {
     const head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].filter(String);
     if (head.join('|') === cols.join('|')) return sh;
+    if (cols === ORDER_COLS && head.map(h => RENAMED[h] || h).join('|') === cols.join('|')) {
+      renameInPlace(sh, head);                    // nur Spalten umbenannt: Blatt behalten, Werte neu berechnen
+      return sh;
+    }
     if (sh.getLastRow() > 1) {                    // ältere Spaltenfolge mit Daten: aufheben, neu anlegen, Daten übernehmen
       old = sh;
       old.setName(name + ' (alt ' + Utilities.formatDate(new Date(), 'Europe/Berlin', 'dd.MM. HH:mm') + ')');
@@ -122,6 +126,21 @@ function sheet(ss, name, cols) {
   }
   if (old && cols === ORDER_COLS) migrateOrders(old, sh, name.indexOf('Test') === 0);
   return sh;
+}
+
+/** Umbenannte Spalten: Kopf ersetzen, Werte aus „Daten“ neu berechnen – alle übrigen Einträge bleiben. */
+const RENAMED = { 'Summe (B2B netto / B2C brutto)': 'Gesamt netto' };
+function renameInPlace(sh, head) {
+  const last = sh.getLastRow(), dCol = head.indexOf('Daten') + 1;
+  const data = last > 1 ? sh.getRange(2, dCol, last - 1, 1).getValues() : [];
+  head.forEach((h, i) => {
+    if (!RENAMED[h]) return;
+    const name = RENAMED[h];
+    sh.getRange(1, i + 1).setValue(name);
+    if (!data.length) return;
+    const vals = data.map(r => { try { return [r[0] ? orderValues(JSON.parse(r[0]), false)[name] : '']; } catch (e) { return ['']; } });
+    sh.getRange(2, i + 1, vals.length, 1).setValues(vals).setNumberFormat('#,##0.00 €');
+  });
 }
 
 /** Bestellungen aus einem Blatt mit älterer Spaltenfolge übernehmen (Grundlage: Spalte „Daten“). */
@@ -178,7 +197,7 @@ function orderValues(p, test) {
     'Straße': txt(c.str), 'PLZ': txt(c.plz), 'Ort': txt(c.ort), 'Lieferart': DELIV[d.type] || d.type,
     'Lieferanschrift (abweichend)': txt(d.address), 'Wunschtermin': isoDate(d.wish) ? dateOf(d.wish) : txt(d.wish),
     'Bemerkung': txt(p.note), 'Flaschen': t.bottles, 'Zwischensumme': eur(t.subCents), 'Privilège': -eur(t.discCents),
-    'Versand': eur(t.shipCents), 'Summe (B2B netto / B2C brutto)': eur(t.totalCents), 'MwSt.': eur(t.vatCents),
+    'Versand': eur(t.shipCents), 'Gesamt netto': eur(t.grossCents - t.vatCents), 'MwSt.': eur(t.vatCents),
     'Gesamt brutto': eur(t.grossCents), 'Newsletter': p.newsletter ? 'ja' : '', 'Gastro/Fachhandel bestätigt': p.businessConfirmed ? 'ja' : '',
     'Bestellt am (Gerät)': new Date(p.createdAt), 'Hinweis': notes(p, test), 'Bestätigungsmail': 'wird gesendet …',
     'ID': p.id, 'Daten': JSON.stringify(p)
