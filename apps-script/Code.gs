@@ -4,6 +4,8 @@
  *
  * Nimmt Bestellungen der App entgegen, schreibt sie in die Tabelle (Bestellungen + Positionen),
  * verhindert Doppelbestellungen (gleiche ID) und versendet die Bestätigung über Brevo.
+ * Menü „Paulée → JTL-Importdatei erstellen“ erzeugt die CSV für JTL-Ameise (Aufträge):
+ * nur Bestellungen mit eingetragener JTL-Kundennummer, jede Bestellung nur einmal.
  * Brevo-Schlüssel: Projekteinstellungen → Skripteigenschaften → BREVO_API_KEY
  */
 
@@ -15,7 +17,9 @@ const CFG = {
   logoUrl: 'https://paulee-berlin-2026.pages.dev/img/logo-gold.png',
   deadline: new Date('2026-11-02T23:59:59+01:00'),
   phone: '+49 30 695 199 20',
-  web: 'https://www.weine-visentin.de/'
+  web: 'https://www.weine-visentin.de/',
+  csvCharset: 'UTF-8',                          // falls Umlaute in der Ameise falsch erscheinen: 'windows-1252'
+  orderPrefix: 'PAULEE-'                        // Bestellnummer Paulée in der Importdatei (z. B. PAULEE-7K3FQ)
 };
 
 const SHEETS = {
@@ -23,11 +27,14 @@ const SHEETS = {
   testOrders: 'Test – Bestellungen', testItems: 'Test – Positionen'
 };
 
-const ORDER_COLS = ['Eingang', 'Bestellnr.', 'In JTL erfasst', 'Typ', 'Sprache', 'Firma', 'Name / Ansprechpartner',
-  'E-Mail', 'Telefon', 'Kundennr.', 'USt-IdNr.', 'Straße', 'PLZ', 'Ort', 'Lieferart', 'Lieferanschrift (abweichend)',
-  'Wunschtermin', 'Bemerkung', 'Flaschen', 'Zwischensumme', 'Privilège', 'Versand', 'Summe (B2B netto / B2C brutto)',
-  'MwSt.', 'Gesamt brutto', 'Newsletter', 'Gastro/Fachhandel bestätigt', 'Bestellt am (Gerät)', 'Hinweis',
-  'Bestätigungsmail', 'ID', 'Daten'];
+const ORDER_COLS = ['Eingang', 'Bestellnr.', 'JTL-Kundennr.', 'JTL-Export', 'In JTL erfasst', 'Typ', 'Sprache',
+  'Firma', 'Vorname', 'Nachname', 'E-Mail', 'Telefon', 'Kundennr. (Angabe Kunde)', 'USt-IdNr.', 'Straße', 'PLZ', 'Ort',
+  'Lieferart', 'Lieferanschrift (abweichend)', 'Wunschtermin', 'Bemerkung', 'Flaschen', 'Zwischensumme', 'Privilège',
+  'Versand', 'Summe (B2B netto / B2C brutto)', 'MwSt.', 'Gesamt brutto', 'Newsletter', 'Gastro/Fachhandel bestätigt',
+  'Bestellt am (Gerät)', 'Hinweis', 'Bestätigungsmail', 'ID', 'Daten'];
+// Spalten der Importdatei für JTL-Ameise (Verkauf → Aufträge), eine Zeile je Position
+const JTL_COLS = ['Kundennummer', 'Anmerkung', 'Voraus. Lieferdatum', 'Artikelnummer', 'Menge', 'Positionsart',
+  'Rabatt (%)', 'Hinweis (Position)', 'Artikelname', 'VK Netto', 'Bestellnummer Paulée'];
 const ITEM_COLS = ['Bestellnr.', 'Typ', 'Kunde', 'Wein-Nr.', 'ART. NR.', 'Wein', 'Domaine', 'Einheit', 'Menge',
   'Einzelpreis', 'Summe', 'ID'];
 const COL = name => ORDER_COLS.indexOf(name) + 1;
@@ -72,7 +79,7 @@ function validate(p) {
   if (p.mode !== 'B2C' && p.mode !== 'B2B') return 'bad mode';
   if (!Array.isArray(p.items) || !p.items.length || p.items.length > 300) return 'bad items';
   for (const i of p.items) if (!(i.qty >= 1 && i.qty <= 999)) return 'bad qty';
-  if (!p.customer || !p.customer.name || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(p.customer.mail || '')) return 'bad customer';
+  if (!p.customer || !fullName(p.customer) || !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(p.customer.mail || '')) return 'bad customer';
   if (!p.totals || typeof p.totals.totalCents !== 'number') return 'bad totals';
   return '';
 }
@@ -91,10 +98,23 @@ function notes(p, test) {
 
 function sheet(ss, name, cols) {
   let sh = ss.getSheetByName(name);
-  if (!sh) {
-    sh = ss.insertSheet(name);
-    sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold').setBackground('#EBE7E0');
-    sh.setFrozenRows(1);
+  if (sh) {
+    const head = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].filter(String);
+    if (head.join('|') === cols.join('|')) return sh;
+    if (sh.getLastRow() > 1) {                    // ältere Spaltenfolge mit Daten: aufheben, neu anlegen
+      sh.setName(name + ' (alt ' + Utilities.formatDate(new Date(), 'Europe/Berlin', 'dd.MM. HH:mm') + ')');
+      sh = null;
+    } else {
+      sh.clear();
+    }
+  }
+  if (!sh) sh = ss.insertSheet(name);
+  sh.getRange(1, 1, 1, cols.length).setValues([cols]).setFontWeight('bold').setBackground('#EBE7E0');
+  sh.setFrozenRows(1);
+  const k = cols.indexOf('JTL-Kundennr.');
+  if (k >= 0) {                                   // vom Team auszufüllen: hervorheben
+    sh.getRange(1, k + 1).setBackground('#F3D9A4').setNote('Vom Team auszufüllen: Kundennummer aus JTL-Wawi. Erst dann wird die Bestellung in die JTL-Importdatei übernommen.');
+    sh.getRange(2, k + 1, sh.getMaxRows() - 1, 1).setBackground('#FBF3E2');
   }
   return sh;
 }
@@ -111,23 +131,40 @@ function findRow(sh, id) {
 const txt = v => { v = v == null ? '' : String(v); return /^[=+\-@]/.test(v) || /^\d[\d\s/]*$/.test(v) ? "'" + v : v; };
 const eur = c => Math.round(c) / 100;
 
+const isoDate = v => /^\d{4}-\d{2}-\d{2}$/.test(v || '');
+const dateOf = v => new Date(v + 'T12:00:00');
+const fullName = c => c.name || [c.vorname, c.nachname].filter(Boolean).join(' ');
+const splitName = c => {                          // ältere App-Fassung schickte nur „name“
+  if (c.vorname || c.nachname) return [c.vorname || '', c.nachname || ''];
+  const parts = String(c.name || '').trim().split(/\s+/); const last = parts.pop() || '';
+  return [parts.join(' '), last];
+};
+
 function appendOrder(sh, shI, p, test) {
   const c = p.customer, t = p.totals, d = p.delivery || {};
-  const values = [
-    new Date(), p.code, false, p.mode, (p.lang || 'de').toUpperCase(), txt(c.firma), txt(c.name), txt(c.mail), txt(c.tel),
-    txt(c.kdnr), txt(c.ustid), txt(c.str), txt(c.plz), txt(c.ort), DELIV[d.type] || d.type, txt(d.address), txt(d.wish),
-    txt(p.note), t.bottles, eur(t.subCents), -eur(t.discCents), eur(t.shipCents), eur(t.totalCents), eur(t.vatCents),
-    eur(t.grossCents), p.newsletter ? 'ja' : '', p.businessConfirmed ? 'ja' : '', new Date(p.createdAt), notes(p, test),
-    'wird gesendet …', p.id, JSON.stringify(p)
-  ];
-  sh.appendRow(values);
+  const [vor, nach] = splitName(c);
+  const v = {
+    'Eingang': new Date(), 'Bestellnr.': p.code, 'JTL-Kundennr.': '', 'JTL-Export': '', 'In JTL erfasst': false,
+    'Typ': p.mode, 'Sprache': (p.lang || 'de').toUpperCase(), 'Firma': txt(c.firma), 'Vorname': txt(vor), 'Nachname': txt(nach),
+    'E-Mail': txt(c.mail), 'Telefon': txt(c.tel), 'Kundennr. (Angabe Kunde)': txt(c.kdnr), 'USt-IdNr.': txt(c.ustid),
+    'Straße': txt(c.str), 'PLZ': txt(c.plz), 'Ort': txt(c.ort), 'Lieferart': DELIV[d.type] || d.type,
+    'Lieferanschrift (abweichend)': txt(d.address), 'Wunschtermin': isoDate(d.wish) ? dateOf(d.wish) : txt(d.wish),
+    'Bemerkung': txt(p.note), 'Flaschen': t.bottles, 'Zwischensumme': eur(t.subCents), 'Privilège': -eur(t.discCents),
+    'Versand': eur(t.shipCents), 'Summe (B2B netto / B2C brutto)': eur(t.totalCents), 'MwSt.': eur(t.vatCents),
+    'Gesamt brutto': eur(t.grossCents), 'Newsletter': p.newsletter ? 'ja' : '', 'Gastro/Fachhandel bestätigt': p.businessConfirmed ? 'ja' : '',
+    'Bestellt am (Gerät)': new Date(p.createdAt), 'Hinweis': notes(p, test), 'Bestätigungsmail': 'wird gesendet …',
+    'ID': p.id, 'Daten': JSON.stringify(p)
+  };
+  sh.appendRow(ORDER_COLS.map(k => v[k]));
   const row = sh.getLastRow();
   sh.getRange(row, COL('In JTL erfasst')).insertCheckboxes();
   sh.getRange(row, COL('Zwischensumme'), 1, 6).setNumberFormat('#,##0.00 €');
   sh.getRange(row, COL('Eingang')).setNumberFormat('dd.MM.yyyy HH:mm');
   sh.getRange(row, COL('Bestellt am (Gerät)')).setNumberFormat('dd.MM.yyyy HH:mm');
+  sh.getRange(row, COL('Wunschtermin')).setNumberFormat('dd.MM.yyyy');
 
-  const kunde = c.firma ? c.firma + ' – ' + c.name : c.name;
+  const name = fullName(c);
+  const kunde = c.firma ? c.firma + ' – ' + name : name;
   const rows = p.items.map(i => [p.code, p.mode, txt(kunde), i.n, i.art, i.wine, i.domaine, i.unit, i.qty,
     eur(i.priceCents), eur(i.lineCents || i.priceCents * i.qty), p.id]);
   const start = shI.getLastRow() + 1;
@@ -150,7 +187,7 @@ function sendConfirmation(p) {
   const m = buildMail(p);
   const body = {
     sender: { name: CFG.senderName, email: CFG.senderEmail },
-    to: [{ email: p.customer.mail, name: p.customer.name }],
+    to: [{ email: p.customer.mail, name: fullName(p.customer) }],
     replyTo: { email: CFG.replyTo },
     subject: (p.preview ? '[TEST] ' : '') + m.subject,
     htmlContent: m.html,
@@ -178,7 +215,7 @@ function buildMail(p) {
   const accent = b2b ? '#003B54' : '#75232A';
   const L = en ? {
     subject: `Your order ${p.code} – La Paulée de Berlin 2026`,
-    hello: `Dear ${esc(p.customer.name)},`,
+    hello: `Dear ${esc(fullName(p.customer))},`,
     intro: `thank you for your order at La Paulée de Berlin. We have received it and will be in touch regarding the ${d.type === 'lieferung' ? 'delivery' : 'pick-up'}.`,
     no: 'Order number', wine: 'Wine', qty: 'Qty', price: 'Price', sum: 'Amount',
     sub: 'Subtotal', priv: `Privilège Paulée –${t.privilegePct} %`, ship: d.type === 'lieferung' ? 'Shipping' : 'Pick-up', free: 'free',
@@ -192,7 +229,7 @@ function buildMail(p) {
     bye: 'With warm regards,', team: 'Sébastien Visentin and the VISENTIN team'
   } : {
     subject: `Ihre Bestellung ${p.code} – La Paulée de Berlin 2026`,
-    hello: `Guten Tag ${esc(p.customer.name)},`,
+    hello: `Guten Tag ${esc(fullName(p.customer))},`,
     intro: `vielen Dank für Ihre Bestellung bei La Paulée de Berlin. Wir haben sie erhalten und melden uns wegen ${d.type === 'lieferung' ? 'der Lieferung' : 'der Abholung'} bei Ihnen.`,
     no: 'Bestellnummer', wine: 'Wein', qty: 'Fl.', price: 'Preis', sum: 'Betrag',
     sub: 'Zwischensumme', priv: `Privilège Paulée –${t.privilegePct} %`, ship: d.type === 'lieferung' ? 'Versand' : 'Abholung', free: 'kostenfrei',
@@ -227,7 +264,7 @@ function buildMail(p) {
   ].join('');
   const extra = [
     d.address ? `<b>${L.address}:</b> ${esc(d.address)}` : '',
-    d.wish ? `<b>${L.wish}:</b> ${esc(d.wish)}` : '',
+    d.wish ? `<b>${L.wish}:</b> ${esc(isoDate(d.wish) ? Utilities.formatDate(dateOf(d.wish), 'Europe/Berlin', en ? 'd MMMM yyyy' : 'dd.MM.yyyy') : d.wish)}` : '',
     p.note ? `<b>${L.note}:</b> ${esc(p.note)}` : ''
   ].filter(Boolean).join('<br>');
 
@@ -257,6 +294,9 @@ ${CFG.phone} · <a href="mailto:${CFG.replyTo}" style="color:#857E78">${CFG.repl
 
 function onOpen() {
   SpreadsheetApp.getUi().createMenu('Paulée')
+    .addItem('JTL-Importdatei erstellen', 'jtlExport')
+    .addItem('JTL-Export zurücksetzen (markierte Zeilen)', 'jtlExportZuruecksetzen')
+    .addSeparator()
     .addItem('Bestätigung erneut senden (markierte Zeile)', 'erneutSenden')
     .addSeparator()
     .addItem('Einrichtung prüfen', 'einrichten')
@@ -306,13 +346,120 @@ function erneutSenden() {
   const sh = SpreadsheetApp.getActiveSheet();
   const row = sh.getActiveRange().getRow();
   if (row < 2) return SpreadsheetApp.getUi().alert('Bitte eine Bestellzeile markieren.');
-  const data = sh.getRange(row, COL('Daten')).getValue();
+  const H = headers(sh);
+  if (!H['Daten']) return SpreadsheetApp.getUi().alert('Bitte im Blatt „Bestellungen“ eine Zeile markieren.');
+  const data = sh.getRange(row, H['Daten']).getValue();
   if (!data) return SpreadsheetApp.getUi().alert('In dieser Zeile fehlen die Bestelldaten.');
   const p = JSON.parse(data);
-  p.customer.mail = String(sh.getRange(row, COL('E-Mail')).getValue()).replace(/^'/, '');   // korrigierte Adresse übernehmen
+  p.customer.mail = String(sh.getRange(row, H['E-Mail']).getValue()).replace(/^'/, '');   // korrigierte Adresse übernehmen
   const status = sendConfirmation(p);
-  sh.getRange(row, COL('Bestätigungsmail')).setValue(status);
+  sh.getRange(row, H['Bestätigungsmail']).setValue(status);
   SpreadsheetApp.getUi().alert(p.code + ': ' + status);
+}
+
+/* ---------------- JTL-Ameise: Importdatei ---------------- */
+
+function headers(sh) {
+  const h = {};
+  sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].forEach((name, i) => { if (name) h[name] = i + 1; });
+  return h;
+}
+
+const csvCell = v => {
+  v = v == null ? '' : String(v).replace(/[\r\n]+/g, ' ').trim();
+  return /[;"]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v;
+};
+const deNum = (x, dec) => x.toFixed(dec).replace('.', ',');
+
+/** Zeilen der Importdatei für eine Bestellung: je Wein eine Artikelposition, dazu ggf. eine Versandposition. */
+function jtlRows(p, kdnr, test) {
+  const d = p.delivery || {}, t = p.totals;
+  const ordNo = (test ? 'TEST-' : CFG.orderPrefix) + String(p.code).replace(/^P-/, '');
+  const deliv = DELIV[d.type] || d.type;
+  const anm = ['Paulée 2026 · ' + p.code,
+    p.mode === 'B2B' ? 'Gastronomie & Fachhandel' : 'Privatkunde',
+    deliv + (d.type === 'lieferung' && !t.shipCents ? ' (versandkostenfrei)' : ''),
+    d.address ? 'Lieferanschrift: ' + d.address : '',
+    d.wish && !isoDate(d.wish) ? 'Wunschtermin: ' + d.wish : '',
+    p.note ? 'Kunde: ' + p.note : ''
+  ].filter(Boolean).join(' · ');
+  const lief = isoDate(d.wish) ? Utilities.formatDate(dateOf(d.wish), 'Europe/Berlin', 'dd.MM.yyyy') : '';
+  const rows = p.items.map(i => [kdnr, anm, lief, i.art, i.qty, 'Artikel', t.privilegePct || 0,
+    'Paulée 2026 · ' + i.n, i.wine, '', ordNo]);
+  if (t.shipCents > 0) {
+    // B2B-Versand ist netto, B2C-Versand brutto → netto mit 4 Nachkommastellen
+    const net = p.mode === 'B2B' ? t.shipCents / 100 : t.shipCents / 100 / (1 + (t.vatPct || 19) / 100);
+    rows.push([kdnr, anm, lief, '', 1, 'Versand', 0, 'Paulée 2026 · Versand', 'Versandkosten', deNum(net, 4), ordNo]);
+  }
+  return rows;
+}
+
+/** Menü: Importdatei für alle Bestellungen mit JTL-Kundennummer, die noch nicht exportiert wurden. */
+function jtlExport() {
+  const ui = SpreadsheetApp.getUi(), ss = SpreadsheetApp.getActive();
+  const test = ss.getActiveSheet().getName().indexOf('Test') === 0;   // im Test-Blatt aufgerufen: Testbestellungen
+  const sh = ss.getSheetByName(test ? SHEETS.testOrders : SHEETS.orders);
+  if (!sh) return ui.alert('Blatt „' + (test ? SHEETS.testOrders : SHEETS.orders) + '“ fehlt.');
+  const lock = LockService.getDocumentLock();
+  lock.waitLock(20000);
+  try {
+    const data = sh.getDataRange().getValues(), H = headers(sh);
+    const ix = n => H[n] - 1;
+    const take = [], missing = [];
+    for (let r = 1; r < data.length; r++) {
+      const row = data[r];
+      if (!row[ix('ID')] || row[ix('JTL-Export')]) continue;            // leer oder schon exportiert
+      const kd = String(row[ix('JTL-Kundennr.')]).trim();
+      if (!kd) { missing.push(row[ix('Bestellnr.')]); continue; }
+      take.push({ r: r + 1, kd, p: JSON.parse(row[ix('Daten')]) });
+    }
+    if (!take.length) {
+      return ui.alert('Keine neuen Bestellungen für den Export.' +
+        (missing.length ? '\n\nOhne JTL-Kundennr. (' + missing.length + '): ' + missing.join(', ') : ''));
+    }
+    const lines = [JTL_COLS.map(csvCell).join(';')];
+    take.forEach(x => jtlRows(x.p, x.kd, test).forEach(r => lines.push(r.map(csvCell).join(';'))));
+    const csv = lines.join('\r\n') + '\r\n';
+
+    const now = new Date();
+    const fname = 'JTL-Import Paulée 2026 ' + (test ? 'TEST ' : '') + Utilities.formatDate(now, 'Europe/Berlin', 'yyyy-MM-dd HH-mm') + '.csv';
+    const blob = CFG.csvCharset === 'UTF-8'
+      ? Utilities.newBlob('\uFEFF' + csv, 'text/csv', fname)
+      : Utilities.newBlob('', 'text/csv', fname).setDataFromString(csv, CFG.csvCharset);
+    const parents = DriveApp.getFileById(ss.getId()).getParents();
+    const file = (parents.hasNext() ? parents.next() : DriveApp.getRootFolder()).createFile(blob);
+
+    const stamp = Utilities.formatDate(now, 'Europe/Berlin', 'dd.MM.yyyy HH:mm') + ' · ' + fname;
+    take.forEach(x => sh.getRange(x.r, H['JTL-Export']).setValue(stamp));
+    SpreadsheetApp.flush();
+
+    const positions = lines.length - 1;
+    const html = HtmlService.createHtmlOutput(
+      '<div style="font:14px/1.5 Arial,sans-serif">' +
+      '<p><b>' + take.length + ' Bestellungen</b> mit ' + positions + ' Zeilen exportiert.</p>' +
+      '<p><a href="https://drive.google.com/uc?export=download&id=' + file.getId() + '" target="_blank">Importdatei herunterladen</a><br>' +
+      '<span style="color:#777">' + fname + '</span></p>' +
+      (missing.length ? '<p style="color:#9C7A3C">Noch ohne JTL-Kundennr. und daher nicht enthalten (' + missing.length + '):<br>' + missing.join(', ') + '</p>' : '') +
+      '<p style="color:#777">Jede Bestellung wird nur einmal exportiert (Spalte „JTL-Export“). ' +
+      'Diese Datei bitte nur einmal in die Ameise importieren.</p></div>').setWidth(460).setHeight(300);
+    ui.showModalDialog(html, 'JTL-Importdatei');
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+/** Menü: Export-Markierung der markierten Zeilen löschen – nur wenn der Import in JTL nicht erfolgt ist. */
+function jtlExportZuruecksetzen() {
+  const ui = SpreadsheetApp.getUi(), sh = SpreadsheetApp.getActiveSheet(), H = headers(sh);
+  if (!H['JTL-Export']) return ui.alert('Bitte im Blatt „Bestellungen“ die betreffenden Zeilen markieren.');
+  const range = sh.getActiveRange();
+  const first = Math.max(range.getRow(), 2), last = range.getLastRow();
+  if (last < first) return ui.alert('Bitte Bestellzeilen markieren.');
+  const codes = sh.getRange(first, H['Bestellnr.'], last - first + 1, 1).getValues().map(r => r[0]).filter(String);
+  const ok = ui.alert('JTL-Export zurücksetzen', 'Nur tun, wenn diese Bestellungen NICHT in JTL angelegt wurden – sonst entstehen doppelte Aufträge.\n\n' +
+    codes.join(', '), ui.ButtonSet.OK_CANCEL);
+  if (ok !== ui.Button.OK) return;
+  sh.getRange(first, H['JTL-Export'], last - first + 1, 1).clearContent();
 }
 
 function json(o) {

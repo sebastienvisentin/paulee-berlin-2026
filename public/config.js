@@ -20,6 +20,7 @@ window.PAULEE_CONFIG = {
   b2bFreeFrom: 500, b2bPerBottle: 0.50, b2bMin: 9.50,
 
   deliveryUntil: '30. November 2026',
+  deliveryFrom: '2026-11-03',      // frühester Wunschtermin im Datumsfeld
   contactMail: 'info@weine-visentin.de',
   contactPhone: '+49 30 695 199 20'
 };

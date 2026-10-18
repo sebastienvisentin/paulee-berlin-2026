@@ -84,12 +84,13 @@ const TXT = {
     after: ph => `Die Bestellung ist seit dem 2. November, 23:59 Uhr, geschlossen. Für Fragen erreichen Sie uns unter ${ph}.`,
     formTitle: 'Ihre Angaben',
     f: {
-      name: 'Vor- und Nachname', kdnrC: 'Kundennummer (falls bekannt)', str: 'Straße / Hausnr.', plz: 'PLZ', ort: 'Ort', tel: 'Telefon', mail: 'E-Mail',
-      firma: 'Firma / Restaurant', contact: 'Ansprechpartner', mailB: 'E-Mail (für die Bestätigung)', kdnr: 'Kundennummer', ustid: 'USt-IdNr.',
+      first: 'Vorname', last: 'Nachname', firstB: 'Vorname Ansprechpartner', lastB: 'Nachname Ansprechpartner', kdnrC: 'Kundennummer (falls bekannt)', str: 'Straße / Hausnr.', plz: 'PLZ', ort: 'Ort', tel: 'Telefon', mail: 'E-Mail',
+      firma: 'Firma / Restaurant', mailB: 'E-Mail (für die Bestätigung)', kdnr: 'Kundennummer', ustid: 'USt-IdNr.',
       laToggle: 'Lieferanschrift weicht ab', laName: 'Name / Firma',
-      wish: (d, deliv) => `Wunschtermin ${deliv ? 'für die Lieferung' : 'für die Abholung'} (bis ${d})`, note: 'Bemerkung'
+      wish: deliv => `Wunschtermin ${deliv ? 'für die Lieferung' : 'für die Abholung'} (optional)`,
+      wishHint: d => `Lieferung bzw. Abholung bis ${d}. Abweichende Wünsche gern unter Bemerkung.`, note: 'Bemerkung'
     },
-    summary: 'Zusammenfassung',
+    summary: 'Zusammenfassung', ordered: 'Ihre Bestellung', wishShort: 'Wunschtermin', addrShort: 'Lieferanschrift', noteShort: 'Bemerkung',
     nl: 'Ja, ich möchte den Newsletter von VISENTIN erhalten.',
     adult: 'Ich bin volljährig.',
     agb: `Ich akzeptiere die ${link('AGB', 'AGB')} und habe die ${link('Widerrufsrecht', 'Widerrufsbelehrung')} zur Kenntnis genommen.`,
@@ -173,12 +174,13 @@ const TXT = {
     after: ph => `Ordering closed on 2 November at 11:59 pm. For questions please call ${ph}.`,
     formTitle: 'Your details',
     f: {
-      name: 'First and last name', kdnrC: 'Customer number (if known)', str: 'Street and number', plz: 'Postcode', ort: 'City', tel: 'Phone', mail: 'Email',
-      firma: 'Company / restaurant', contact: 'Contact person', mailB: 'Email (for the confirmation)', kdnr: 'Customer number', ustid: 'VAT ID',
+      first: 'First name', last: 'Last name', firstB: 'Contact first name', lastB: 'Contact last name', kdnrC: 'Customer number (if known)', str: 'Street and number', plz: 'Postcode', ort: 'City', tel: 'Phone', mail: 'Email',
+      firma: 'Company / restaurant', mailB: 'Email (for the confirmation)', kdnr: 'Customer number', ustid: 'VAT ID',
       laToggle: 'Different delivery address', laName: 'Name / company',
-      wish: (d, deliv) => `Preferred date for ${deliv ? 'delivery' : 'pick-up'} (by 30 November 2026)`, note: 'Comments'
+      wish: deliv => `Preferred date for ${deliv ? 'delivery' : 'pick-up'} (optional)`,
+      wishHint: () => 'Delivery or pick-up by 30 November 2026. Other requests welcome under comments.', note: 'Comments'
     },
-    summary: 'Summary',
+    summary: 'Summary', ordered: 'Your order', wishShort: 'Preferred date', addrShort: 'Delivery address', noteShort: 'Comments',
     nl: 'Yes, I would like to receive the VISENTIN newsletter.',
     adult: 'I am of legal drinking age (18+).',
     agb: `I accept the ${link('AGB', 'terms and conditions')} and have read the ${link('Widerrufsrecht', 'cancellation policy')} (in German).`,
@@ -511,7 +513,7 @@ function updatePending() {
 }
 
 /* Bestelltext für den E-Mail-Notweg – immer Deutsch, weil er beim Team ankommt */
-const FIELD_LABEL = { firma: 'Firma / Restaurant', name: 'Name / Ansprechpartner', kdnr: 'Kundennummer', ustid: 'USt-IdNr.',
+const FIELD_LABEL = { firma: 'Firma / Restaurant', vorname: 'Vorname', nachname: 'Nachname', kdnr: 'Kundennummer', ustid: 'USt-IdNr.',
   str: 'Straße / Hausnr.', plz: 'PLZ', ort: 'Ort', tel: 'Telefon', mail: 'E-Mail' };
 function orderText(p) {
   const L = [`Bestellung ${p.code} – La Paulée de Berlin 2026`,
@@ -524,9 +526,9 @@ function orderText(p) {
       ? [`Summe netto: ${money(t.totalCents)}`, `zzgl. ${t.vatPct} % MwSt.: ${money(t.vatCents)}`, `Gesamtbetrag brutto: ${money(t.grossCents)}`]
       : [`Summe: ${money(t.totalCents)} (darin ${t.vatPct} % MwSt.: ${money(t.vatCents)})`]), '');
   if (p.mode === 'B2B') L.push('Bestellung zu Konditionen für Gastronomie & Fachhandel (Betrieb der Gastronomie/des Weinfachhandels bestätigt).', '');
-  for (const [k, v] of Object.entries(p.customer)) if (v) L.push(`${FIELD_LABEL[k] || k}: ${v}`);
+  for (const [k, v] of Object.entries(p.customer)) if (v && k !== 'name') L.push(`${FIELD_LABEL[k] || k}: ${v}`);
   if (p.delivery.address) L.push(`Lieferanschrift: ${p.delivery.address}`);
-  if (p.delivery.wish) L.push(`Wunschtermin: ${p.delivery.wish}`);
+  if (p.delivery.wish) L.push(`Wunschtermin: ${fmtDate(p.delivery.wish, 'de')}`);
   if (p.note) L.push(`Bemerkung: ${p.note}`);
   L.push('', `Referenz: ${p.id}`);
   return L.join('\n');
@@ -535,24 +537,57 @@ function mailHref(p) {
   return `mailto:${C.contactMail}?subject=${encodeURIComponent('Paulée-Bestellung ' + p.code)}&body=${encodeURIComponent(orderText(p))}`;
 }
 
+/* Datum aus dem Datumsfeld (JJJJ-MM-TT) lesbar machen; Freitext bleibt unverändert */
+function fmtDate(v, lang = LANG) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v || '');
+  if (!m) return v || '';
+  return new Date(+m[1], m[2] - 1, +m[3]).toLocaleDateString(lang === 'de' ? 'de-DE' : 'en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+}
+
+/* Übersicht einer abgesendeten Bestellung – aus den gespeicherten Daten, funktioniert offline */
+function orderSummaryHtml(p) {
+  const t = T(), tt = p.totals, b2b = p.mode === 'B2B', d = p.delivery || {};
+  const row = (a, b, cls = '') => `<div class="${cls}"><span>${a}</span><span>${b}</span></div>`;
+  let h = `<fieldset style="text-align:left"><legend>${t.ordered}</legend><div class="lines">`;
+  for (const i of p.items) {
+    h += `<div class="line"><div><div class="line-t">${esc(i.wine)}</div>` +
+         `<div class="line-s">${esc(i.n)} · ${esc(i.domaine)} · ${i.qty} × ${money(i.priceCents)}</div></div>` +
+         `<div class="line-r">${money(i.lineCents || i.priceCents * i.qty)}</div></div>`;
+  }
+  h += `</div><div class="sum">` +
+    row(t.sub, money(tt.subCents)) +
+    row(t.priv(tt.privilegePct), '–' + money(tt.discCents), 'p') +
+    row(d.type === 'lieferung' ? t.ship : t.pickup, tt.shipCents ? money(tt.shipCents) : t.free) +
+    (b2b
+      ? row(t.totalNet, money(tt.totalCents), 'tn') + row(t.vatPlus(tt.vatPct), money(tt.vatCents), 'v') + row(t.gross, money(tt.grossCents), 't')
+      : row(t.total, money(tt.totalCents), 't') + row(t.vatIn(tt.vatPct), money(tt.vatCents), 'v')) +
+    `</div><div class="box" style="margin:10px 0 0">` +
+    `<b>${esc((t.deliv[d.type] || [d.type])[0])}</b>` +
+    (d.wish ? `<br>${t.wishShort}: ${esc(fmtDate(d.wish))}` : '') +
+    (d.address ? `<br>${t.addrShort}: ${esc(d.address)}` : '') +
+    (p.note ? `<br>${t.noteShort}: ${esc(p.note)}` : '') +
+    `</div></fieldset>`;
+  return h;
+}
+
 /* ---------- Formular ---------- */
 // [key, Label-Schlüssel, Pflicht, Breite (w = ganze Zeile, s = halbe), autocomplete, type]
 const FIELDS = {
-  c: [['name', 'name', 1, 'w', 'name'], ['kdnr', 'kdnrC', 0, 'w', 'off'],
+  c: [['vorname', 'first', 1, 's', 'given-name'], ['nachname', 'last', 1, 's', 'family-name'], ['kdnr', 'kdnrC', 0, 'w', 'off'],
       ['str', 'str', 1, 'w', 'street-address'], ['plz', 'plz', 1, 's', 'postal-code'], ['ort', 'ort', 1, 's', 'address-level2'],
       ['tel', 'tel', 1, 's', 'tel', 'tel'], ['mail', 'mail', 1, 's', 'email', 'email']],
-  b: [['firma', 'firma', 1, 'w', 'organization'], ['name', 'contact', 1, 'w', 'name'],
+  b: [['firma', 'firma', 1, 'w', 'organization'], ['vorname', 'firstB', 1, 's', 'given-name'], ['nachname', 'lastB', 1, 's', 'family-name'],
       ['mail', 'mailB', 1, 'w', 'email', 'email'],
       ['kdnr', 'kdnr', 0, 's', 'off'], ['ustid', 'ustid', 0, 's', 'off'],
       ['str', 'str', 0, 'w', 'street-address'], ['plz', 'plz', 0, 's', 'postal-code'], ['ort', 'ort', 0, 's', 'address-level2'],
       ['tel', 'tel', 0, 'w', 'tel', 'tel']]
 };
 
-function fieldHtml([k, lk, req, wd, ac, type], val, labelText) {
+function fieldHtml([k, lk, req, wd, ac, type, extra], val, labelText) {
   const label = labelText || T().f[lk];
   return `<div class="fld ${wd}"><label for="f-${k}">${esc(label)}${req ? ' <i>*</i>' : ''}</label>` +
     `<input id="f-${k}" name="${k}" type="${type || 'text'}" autocomplete="${ac}" value="${esc(val || '')}"${req ? ' required' : ''}` +
-    `${k === 'plz' || k === 'la_plz' ? ' inputmode="numeric"' : ''}${type === 'email' ? ' autocapitalize="off" spellcheck="false"' : ''}></div>`;
+    `${k === 'plz' || k === 'la_plz' ? ' inputmode="numeric"' : ''}${type === 'email' ? ' autocapitalize="off" spellcheck="false"' : ''}${extra || ''}></div>`;
 }
 
 /* ---------- Ansichten im Overlay ---------- */
@@ -649,6 +684,9 @@ const VIEWS = {
     const t = T(), tot = totals();
     const saved = store.get(LS.form, {});
     const v = saved[S.mode] || {};
+    if (v.name && !v.vorname && !v.nachname) {           // frühere Fassung: ein Namensfeld
+      const parts = v.name.trim().split(/\s+/); v.nachname = parts.pop() || ''; v.vorname = parts.join(' ');
+    }
     const deliv = S.deliv === 'lieferung';
     let h = `<div class="f">${FIELDS[S.mode].map(f => fieldHtml(f, v[f[0]])).join('')}</div>`;
     if (deliv) {
@@ -661,7 +699,8 @@ const VIEWS = {
         </div>`;
     }
     h += `<div class="f" style="margin-top:12px">
-        ${fieldHtml(['wish', '', 0, 'w', 'off'], v.wish, t.f.wish(C.deliveryUntil, deliv))}
+        ${fieldHtml(['wish', '', 0, 'w', 'off', 'date', ` min="${C.deliveryFrom || '2026-11-03'}"`], /^\d{4}-\d{2}-\d{2}$/.test(v.wish || '') ? v.wish : '', t.f.wish(deliv))}
+        <p class="hint w" style="margin:-4px 0 0">${t.f.wishHint(C.deliveryUntil)}</p>
         <div class="fld w"><label for="f-note">${t.f.note}</label><textarea id="f-note" name="note">${esc(v.note || '')}</textarea></div>
       </div>`;
     h += `<fieldset><legend>${t.summary}</legend>
@@ -686,7 +725,7 @@ const VIEWS = {
     const p = o.payload, sent = o.status === 'sent', test = !C.endpoint;
     const bottles = p.items.reduce((a, i) => a + i.qty, 0);
     let h = `<div class="done"><div class="mark${sent ? '' : ' wait'}">${sent ? '✓' : '…'}</div>
-      <h3>Merci${p.customer.name ? ', ' + esc(p.customer.name.split(' ')[0]) : ''}.</h3>
+      <h3>Merci${(p.customer.vorname || p.customer.name) ? ', ' + esc(p.customer.vorname || p.customer.name.split(' ')[0]) : ''}.</h3>
       <p>${t.yourNo}</p><div class="no">${p.code}</div>
       <p style="color:var(--muted);font-size:13px">${t.fl(bottles)} · ${p.mode === 'B2B' ? t.netGross(money(p.totals.totalCents), money(p.totals.grossCents)) : money(p.totals.totalCents) + ' ' + t.inclVat}</p>`;
     if (sent) {
@@ -699,6 +738,7 @@ const VIEWS = {
         <a class="btn ghost" style="margin-top:8px" href="${esc(mailHref(p))}">${t.byMail}</a>
         <p class="hint">${t.mailHint}</p>`;
     }
+    h += orderSummaryHtml(p);
     h += `<button class="btn ghost" data-action="close" style="margin-top:14px">${t.backToList}</button></div>`;
     return [t.doneTitle, h];
   },
@@ -814,6 +854,7 @@ function submitOrder() {
   lastSubmit = Date.now();
   const customer = {};
   for (const [k] of FIELDS[S.mode]) customer[k] = v[k] || '';
+  customer.name = [customer.vorname, customer.nachname].filter(Boolean).join(' ');
   const address = S.deliv === 'lieferung' && v.la
     ? [v.la_name, v.la_str, [v.la_plz, v.la_ort].filter(Boolean).join(' ')].filter(Boolean).join(', ') : '';
   const id = uuid();
