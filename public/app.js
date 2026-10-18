@@ -1,12 +1,13 @@
 /* La Paulée de Berlin 2026 – digitale Weinliste & Bestellung
-   Ohne Framework, ohne Build. Läuft nach dem ersten Öffnen offline (Service Worker). */
+   Ohne Framework, ohne Build. Läuft nach dem ersten Öffnen offline (Service Worker).
+   Zweisprachig (Deutsch / English). Texte im Wörterbuch TXT; Bestelldaten für das Team immer auf Deutsch. */
 (() => {
 'use strict';
 
-const APP_VERSION = '2026.10.18';
+const APP_VERSION = '2026.10.18b';
 const C = window.PAULEE_CONFIG || {};
 const LS = { mode: 'pb.mode', code: 'pb.code', cart: 'pb.cart', rate: 'pb.rate', form: 'pb.form',
-             orders: 'pb.orders', seen: 'pb.seen', deliv: 'pb.deliv' };
+             orders: 'pb.orders', seen: 'pb.seen', deliv: 'pb.deliv', lang: 'pb.lang' };
 
 /* ---------- Hilfen ---------- */
 const $ = (s, r = document) => r.querySelector(s);
@@ -23,17 +24,204 @@ const money = c => eur.format(c / 100);           // Beträge intern in Cent
 const cents = x => Math.round(x * 100);
 const fold = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const normCode = s => String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-const fl = n => n === 1 ? '1 Flasche' : n + ' Flaschen';
 const b64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+const flDe = n => n === 1 ? '1 Flasche' : n + ' Flaschen';
+const WEB = 'https://www.weine-visentin.de/';
+const link = (path, label) => `<a href="${WEB}${path}" target="_blank" rel="noopener">${label}</a>`;
 
-const KIND = { rouge: 'rouge', blanc: 'blanc', rose: 'rosé', mousseux: 'effervescent', doux: 'doux', spiritueux: 'spiritueux', sans: 'alkoholfrei' };
-const ROOM = { S: 'Salon Pariser Platz', M: 'Salle à Manger', E: 'Entrée' };
-const NA = { 'a.A.': ['auf Anfrage', 'a.A.'], 'a.Z.': ['auf Zuteilung', 'a.Z.'] };
-const DELIV = {
-  lieferung: ['Lieferung', 'an die Rechnungs- bzw. Lieferanschrift'],
-  'abholung-berlin': ['Abholung Berlin', 'Köpenicker Straße 18–20 · kostenfrei'],
-  'abholung-hamburg': ['Abholung Hamburg', 'Große Elbstraße 131 · kostenfrei']
+/* ---------- Sprache ---------- */
+const detectLang = () => ((navigator.languages && navigator.languages.length ? navigator.languages : [navigator.language || 'de'])
+  .some(l => /^de/i.test(l)) ? 'de' : 'en');
+let LANG = store.get(LS.lang, null) || detectLang();
+
+const TXT = {
+  de: {
+    fl: n => n === 1 ? '1 Flasche' : n + ' Flaschen',
+    flShort: 'Fl.', add: '+ Fl.', net: 'netto', perL: '/l',
+    sans: 'alkoholfrei', onRequest: 'auf Anfrage', allocation: 'auf Zuteilung', notAvail: 'nicht verfügbar',
+    askDesk: 'am Infotisch erfragen',
+    rateAria: 'Ihre Bewertung', of5: i => `${i} von 5`, less: 'Eine Flasche weniger', more: 'Eine Flasche mehr', qtyAria: 'Anzahl Flaschen',
+    modeC: 'Privatkunden', modeB: 'Gastronomie',
+    order: 'Bestellung', yourOrder: 'Ihre Bestellung',
+    searchPh: 'Tischnummer (z. B. 128), Wein oder Domaine', searchAria: 'Suche', tbl: 'Tisch-Nr.',
+    all: 'Alle', rated: 'Bewertet', inCart: 'In der Bestellung',
+    emptyCart: 'Noch keine Weine in Ihrer Bestellung.', emptyFilter: 'Keine Weine zu dieser Auswahl.',
+    dropped: list => `${list} in dieser Preisansicht nicht bestellbar – entfernt`,
+    deliv: {
+      lieferung: ['Lieferung innerhalb Deutschlands', 'an die Rechnungs- bzw. Lieferanschrift'],
+      'abholung-berlin': ['Abholung Berlin', 'Köpenicker Straße 18–20 · kostenfrei'],
+      'abholung-hamburg': ['Abholung Hamburg', 'Große Elbstraße 131 · kostenfrei']
+    },
+    delivShort: { lieferung: 'Lieferung', 'abholung-berlin': 'Abholung Berlin', 'abholung-hamburg': 'Abholung Hamburg' },
+    delivLegend: d => `Lieferung oder Abholung · bis ${d}`,
+    hours: 'Abholung Di.–Fr. 10.30–19.00 Uhr · Sa. 11.00–18.00 Uhr',
+    abroad: 'Lieferung ins Ausland: bitte am Infotisch in der Entrée bestellen.',
+    sub: 'Zwischensumme', priv: p => `Privilège Paulée –${p} %`, ship: 'Versand', pickup: 'Abholung', free: 'kostenfrei',
+    total: 'Summe', vatIn: p => `darin enthalten ${p} % MwSt.`, totalNet: 'Summe netto', vatPlus: p => `zzgl. ${p} % MwSt.`, gross: 'Gesamtbetrag brutto',
+    allIncl: 'Alle Preise inkl. MwSt.', allNet: 'Alle Preise netto zzgl. MwSt.',
+    shipNoteC: (f, p, n) => `Versandkostenfrei ab ${f}, sonst ${p} je Paket (bis ${n} Fl.).`,
+    shipNoteB: (f, p, m) => `Frei Haus ab ${f} netto, sonst ${p} je Flasche, mind. ${m}.`,
+    inclVat: 'inkl. MwSt.', netGross: (n, g) => `${n} netto · ${g} brutto`,
+    pending: n => `<b>${n === 1 ? '1 Bestellung' : n + ' Bestellungen'} noch nicht übertragen.</b> Wird automatisch gesendet, sobald Sie Empfang haben. Ansehen ›`,
+    privSub: 'ab der ersten Flasche · nur am 2. November 2026 bis 23:59 Uhr',
+    date: 'Lundi 2 novembre 2026 · Ambassade de France',
+    lead: 'Die Weinliste ist jetzt auf Ihrem Gerät gespeichert und funktioniert auch ohne Empfang.',
+    steps: [
+      ['Wein finden', 'Tischnummer ins Suchfeld tippen, z. B. 128.'],
+      ['Vormerken', 'Bei jedem Wein „+ Fl.“ – Ihre Auswahl bleibt gespeichert.'],
+      ['Bestellen', 'Bis 23:59 Uhr, auch ohne Empfang: Die Bestellung wird gesendet, sobald Sie wieder Netz haben.']
+    ],
+    pickC: 'Privatkunde', pickCSub: 'Preise inkl. MwSt.', pickB: 'Gastronomie & Fachhandel', pickBSub: 'Nettopreise mit B2B-Code',
+    howTitle: 'So funktioniert’s',
+    modeTitle: 'Preisansicht', modeCSub: 'Preise je Flasche inkl. MwSt.',
+    modeBTitle: 'Gastronomie & Fachhandel', modeBSub: 'Nettopreise zzgl. MwSt. – nur für Gastronomie und Weinfachhandel, mit B2B-Code',
+    codeHint: 'Die Nettopreise gelten <b>ausschließlich für die Gastronomie (Restaurants, Bars, Hotels) und den Weinfachhandel</b>. Andere Unternehmen bestellen bitte zu den Preisen für Privatkunden. Ihren B2B-Code finden Sie auf dem B2B-Bestellformular und in unserer E-Mail an Sie.',
+    codePh: 'B2B-Code', unlock: 'Freischalten', codeBad: 'Dieser Code ist nicht gültig. Bitte prüfen Sie die Schreibweise.',
+    unlocked: 'Nettopreise freigeschaltet', toPrivate: 'Preisansicht: Privatkunden',
+    noWines: 'Noch keine Weine vorgemerkt.', tapAdd: 'Tippen Sie bei einem Wein auf <b>+ Fl.</b>', toList: 'Zur Weinliste',
+    next: 'Weiter zu Ihren Angaben',
+    before: 'Bestellen können Sie am <b>2. November 2026 von 0:00 bis 23:59 Uhr</b>. Ihre Auswahl bleibt bis dahin auf diesem Gerät gespeichert.',
+    after: ph => `Die Bestellung ist seit dem 2. November, 23:59 Uhr, geschlossen. Für Fragen erreichen Sie uns unter ${ph}.`,
+    formTitle: 'Ihre Angaben',
+    f: {
+      name: 'Vor- und Nachname', kdnrC: 'Kundennummer (falls bekannt)', str: 'Straße / Hausnr.', plz: 'PLZ', ort: 'Ort', tel: 'Telefon', mail: 'E-Mail',
+      firma: 'Firma / Restaurant', contact: 'Ansprechpartner', mailB: 'E-Mail (für die Bestätigung)', kdnr: 'Kundennummer', ustid: 'USt-IdNr.',
+      laToggle: 'Lieferanschrift weicht ab', laName: 'Name / Firma',
+      wish: (d, deliv) => `Wunschtermin ${deliv ? 'für die Lieferung' : 'für die Abholung'} (bis ${d})`, note: 'Bemerkung'
+    },
+    summary: 'Zusammenfassung',
+    nl: 'Ja, ich möchte den Newsletter von VISENTIN erhalten.',
+    adult: 'Ich bin volljährig.',
+    agb: `Ich akzeptiere die ${link('AGB', 'AGB')} und habe die ${link('Widerrufsrecht', 'Widerrufsbelehrung')} zur Kenntnis genommen.`,
+    legalC: `Abgabe alkoholischer Getränke nur an Volljährige. Verbraucher können ihre Bestellung binnen 14 Tagen ab Erhalt der Ware ohne Angabe von Gründen widerrufen. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung, für den Newsletter nur mit Ihrer Zustimmung – ${link('Datenschutz', 'Datenschutz')}.`,
+    pro: 'Ich bestelle für einen Betrieb der Gastronomie oder des Weinfachhandels. Mir ist bekannt, dass die Nettopreise nur für diese Betriebe gelten.',
+    legalB: `Alle Preise netto zzgl. gesetzlicher MwSt. Es gelten unsere ${link('AGB', 'AGB für Geschäftskunden')}. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung – ${link('Datenschutz', 'Datenschutz')}.`,
+    buyC: 'Zahlungspflichtig bestellen', buyB: 'Verbindlich bestellen',
+    formErr: 'Bitte ergänzen Sie die markierten Angaben.',
+    doneTitle: 'Vielen Dank', notFound: 'Nicht gefunden.', yourNo: 'Ihre Bestellnummer',
+    sentMsg: (mail, deliv) => `Ihre Bestellung ist bei uns eingegangen. Sie erhalten eine Bestätigung an <b>${mail}</b>; wegen ${deliv ? 'der Lieferung' : 'der Abholung'} melden wir uns bei Ihnen.`,
+    testMsg: '<b>Testbetrieb.</b> Die Bestellung ist auf diesem Gerät gespeichert, wird aber noch nicht übertragen.',
+    waitMsg: '<b>Noch nicht übertragen – kein Empfang.</b><br>Ihre Bestellung ist auf diesem Gerät sicher gespeichert und wird automatisch gesendet, sobald Sie Empfang haben – spätestens, wenn Sie diese Seite nach dem Verlassen der Botschaft noch einmal öffnen.',
+    sendNow: 'Jetzt senden', byMail: 'Stattdessen per E-Mail senden',
+    mailHint: 'Die E-Mail wartet im Postausgang und geht automatisch raus, sobald Sie Empfang haben. Bitte nur eine der beiden Möglichkeiten nutzen.',
+    backToList: 'Zurück zur Weinliste', sending: 'Wird gesendet …',
+    ordersTitle: 'Meine Bestellungen', noOrders: 'Noch keine Bestellungen auf diesem Gerät.',
+    pillSent: 'übertragen', pillTest: 'Test', pillWait: 'wartet',
+    offlineOk: 'Weinliste offline gespeichert', offlineWait: 'Weinliste wird gespeichert …',
+    footPriv: p => `–${p} % ab der ersten Flasche auf alle Bestellungen am 2. November 2026 bis 23:59 Uhr. Weine auf Anfrage (a.A.) oder auf Zuteilung (a.Z.) sind digital nicht bestellbar – bitte am Infotisch erfragen.`,
+    deskH: 'Infotisch · Entrée',
+    desk: 'Bestellannahme, Beratung, Fragen zu Weinen, Konditionen und Lieferung. Dort können Sie auch mit Katalog oder Papierformular bestellen – bitte nur einen Weg nutzen.',
+    shipH: d => `Lieferung & Abholung bis ${d}`,
+    footShipC: (f, p, n) => `Innerhalb Deutschlands ab ${f} versandkostenfrei, sonst ${p} je Paket (bis ${n} Fl.). Preise inkl. MwSt.`,
+    footShipB: (f, p, m) => `Innerhalb Deutschlands frei Haus ab ${f} netto, darunter ${p} je Flasche, mindestens ${m}. Preise netto zzgl. MwSt.`,
+    footPickup: 'Abholung kostenfrei bei VISENTIN – Passion Vin: Berlin, Köpenicker Straße 18–20 · Hamburg, Große Elbstraße 131 · Di.–Fr. 10.30–19.00 Uhr, Sa. 11.00–18.00 Uhr.',
+    switchMode: 'Preisansicht wechseln', other: 'English',
+    links: [['Impressum', 'Impressum'], ['Datenschutz', 'Datenschutz'], ['AGB', 'AGB']], withdrawal: ['Widerrufsrecht', 'Widerrufsrecht'],
+    version: (a, d, n) => `Version ${a} · Liste ${d} · ${n} Positionen`,
+    bPreview: 'Vorschau · Bestellungen werden noch nicht übertragen', bPreviewTest: 'Vorschau · Testbestellungen',
+    bBefore: 'Bestellung am 2. November 2026 bis 23:59 Uhr – bis dahin können Sie Weine vormerken.',
+    bAfter: 'Die Bestellung ist geschlossen. Merci pour votre visite.',
+    loadErr: 'Die Weinliste konnte nicht geladen werden. Bitte mit Empfang erneut öffnen – oder am Infotisch in der Entrée mit dem Papierformular bestellen.',
+    region: r => r
+  },
+  en: {
+    fl: n => n === 1 ? '1 bottle' : n + ' bottles',
+    flShort: 'btl.', add: '+ Add', net: 'net', perL: '/l',
+    sans: 'non-alcoholic', onRequest: 'on request', allocation: 'allocation only', notAvail: 'not available',
+    askDesk: 'please ask at the info desk',
+    rateAria: 'Your rating', of5: i => `${i} of 5`, less: 'One bottle less', more: 'One bottle more', qtyAria: 'Number of bottles',
+    modeC: 'Private', modeB: 'Trade',
+    order: 'Order', yourOrder: 'Your order',
+    searchPh: 'Table number (e.g. 128), wine or domaine', searchAria: 'Search', tbl: 'Table no.',
+    all: 'All', rated: 'Rated', inCart: 'In my order',
+    emptyCart: 'No wines in your order yet.', emptyFilter: 'No wines match this selection.',
+    dropped: list => `${list} cannot be ordered with these prices – removed`,
+    deliv: {
+      lieferung: ['Delivery within Germany', 'to your billing or delivery address'],
+      'abholung-berlin': ['Pick-up in Berlin', 'Köpenicker Straße 18–20 · free of charge'],
+      'abholung-hamburg': ['Pick-up in Hamburg', 'Große Elbstraße 131 · free of charge']
+    },
+    delivShort: { lieferung: 'Delivery', 'abholung-berlin': 'Pick-up Berlin', 'abholung-hamburg': 'Pick-up Hamburg' },
+    delivLegend: () => 'Delivery or pick-up · by 30 November 2026',
+    hours: 'Pick-up Tue–Fri 10:30 am–7 pm · Sat 11 am–6 pm',
+    abroad: 'Delivery outside Germany: please order at the info desk in the Entrée.',
+    sub: 'Subtotal', priv: p => `Privilège Paulée –${p} %`, ship: 'Shipping', pickup: 'Pick-up', free: 'free',
+    total: 'Total', vatIn: p => `incl. ${p} % VAT`, totalNet: 'Total net', vatPlus: p => `plus ${p} % VAT`, gross: 'Total incl. VAT',
+    allIncl: 'All prices incl. VAT.', allNet: 'All prices net, plus VAT.',
+    shipNoteC: (f, p, n) => `Free shipping from ${f}, otherwise ${p} per parcel (up to ${n} btl.).`,
+    shipNoteB: (f, p, m) => `Free delivery from ${f} net, otherwise ${p} per bottle, min. ${m}.`,
+    inclVat: 'incl. VAT', netGross: (n, g) => `${n} net · ${g} incl. VAT`,
+    pending: n => `<b>${n === 1 ? '1 order' : n + ' orders'} not yet sent.</b> It will be sent automatically as soon as you have a signal. View ›`,
+    privSub: 'from the first bottle · only on 2 November 2026 until 11:59 pm',
+    date: 'Lundi 2 novembre 2026 · Ambassade de France',
+    lead: 'The wine list is now saved on your device and works without a signal.',
+    steps: [
+      ['Find a wine', 'Type the table number into the search field, e.g. 128.'],
+      ['Add', 'Tap “+ Add” on any wine – your selection is saved.'],
+      ['Order', 'Until 11:59 pm, even without a signal: your order is sent as soon as you are back online.']
+    ],
+    pickC: 'Private customer', pickCSub: 'Prices incl. VAT', pickB: 'Restaurants & wine trade', pickBSub: 'Net prices with B2B code',
+    howTitle: 'How it works',
+    modeTitle: 'Prices', modeCSub: 'Prices per bottle incl. VAT',
+    modeBTitle: 'Restaurants & wine trade', modeBSub: 'Net prices plus VAT – only for restaurants, bars, hotels and wine retailers, with B2B code',
+    codeHint: 'Net prices apply <b>exclusively to the hospitality trade (restaurants, bars, hotels) and wine retailers</b>. Other businesses please order at private-customer prices. Your B2B code is printed on the B2B order form and in our email to you.',
+    codePh: 'B2B code', unlock: 'Unlock', codeBad: 'This code is not valid. Please check the spelling.',
+    unlocked: 'Net prices unlocked', toPrivate: 'Prices: private customers',
+    noWines: 'No wines added yet.', tapAdd: 'Tap <b>+ Add</b> on any wine.', toList: 'Back to the wine list',
+    next: 'Continue to your details',
+    before: 'You can order on <b>2 November 2026 from midnight until 11:59 pm</b>. Your selection stays saved on this device until then.',
+    after: ph => `Ordering closed on 2 November at 11:59 pm. For questions please call ${ph}.`,
+    formTitle: 'Your details',
+    f: {
+      name: 'First and last name', kdnrC: 'Customer number (if known)', str: 'Street and number', plz: 'Postcode', ort: 'City', tel: 'Phone', mail: 'Email',
+      firma: 'Company / restaurant', contact: 'Contact person', mailB: 'Email (for the confirmation)', kdnr: 'Customer number', ustid: 'VAT ID',
+      laToggle: 'Different delivery address', laName: 'Name / company',
+      wish: (d, deliv) => `Preferred date for ${deliv ? 'delivery' : 'pick-up'} (by 30 November 2026)`, note: 'Comments'
+    },
+    summary: 'Summary',
+    nl: 'Yes, I would like to receive the VISENTIN newsletter.',
+    adult: 'I am of legal drinking age (18+).',
+    agb: `I accept the ${link('AGB', 'terms and conditions')} and have read the ${link('Widerrufsrecht', 'cancellation policy')} (in German).`,
+    legalC: `Alcoholic beverages are sold to adults only. Consumers may cancel their order within 14 days of receiving the goods without giving reasons. We use your details to process your order and, only with your consent, for our newsletter – ${link('Datenschutz', 'privacy policy')} (in German).`,
+    pro: 'I am ordering for a restaurant, bar, hotel or wine retailer. I understand that net prices apply only to these businesses.',
+    legalB: `All prices net, plus statutory VAT. Our ${link('AGB', 'terms for business customers')} apply (in German). We use your details to process your order – ${link('Datenschutz', 'privacy policy')}.`,
+    buyC: 'Order with obligation to pay', buyB: 'Place binding order',
+    formErr: 'Please complete the highlighted fields.',
+    doneTitle: 'Thank you', notFound: 'Not found.', yourNo: 'Your order number',
+    sentMsg: (mail, deliv) => `We have received your order. A confirmation will be sent to <b>${mail}</b>; we will contact you about the ${deliv ? 'delivery' : 'pick-up'}.`,
+    testMsg: '<b>Test mode.</b> The order is saved on this device but not yet transmitted.',
+    waitMsg: '<b>Not sent yet – no signal.</b><br>Your order is safely saved on this device and will be sent automatically as soon as you have a signal – at the latest when you open this page again after leaving the embassy.',
+    sendNow: 'Send now', byMail: 'Send by email instead',
+    mailHint: 'The email waits in your outbox and is sent automatically once you have a signal. Please use only one of the two options.',
+    backToList: 'Back to the wine list', sending: 'Sending …',
+    ordersTitle: 'My orders', noOrders: 'No orders on this device yet.',
+    pillSent: 'sent', pillTest: 'test', pillWait: 'waiting',
+    offlineOk: 'Wine list saved for offline use', offlineWait: 'Saving wine list …',
+    footPriv: p => `–${p} % from the first bottle on all orders placed on 2 November 2026 until 11:59 pm. Wines on request (a.A.) or allocation only (a.Z.) cannot be ordered here – please ask at the info desk.`,
+    deskH: 'Info desk · Entrée',
+    desk: 'Orders, advice, questions about wines, terms and delivery. You can also order there with the catalogue or the paper form – please use only one way.',
+    shipH: () => 'Delivery & pick-up by 30 November 2026',
+    footShipC: (f, p, n) => `Within Germany free shipping from ${f}, otherwise ${p} per parcel (up to ${n} btl.). Prices incl. VAT.`,
+    footShipB: (f, p, m) => `Within Germany free delivery from ${f} net, otherwise ${p} per bottle, minimum ${m}. Prices net, plus VAT.`,
+    footPickup: 'Free pick-up at VISENTIN – Passion Vin: Berlin, Köpenicker Straße 18–20 · Hamburg, Große Elbstraße 131 · Tue–Fri 10:30 am–7 pm, Sat 11 am–6 pm.',
+    switchMode: 'Change prices', other: 'Deutsch',
+    links: [['Impressum', 'Legal notice'], ['Datenschutz', 'Privacy'], ['AGB', 'Terms']], withdrawal: ['Widerrufsrecht', 'Cancellation'],
+    version: (a, d, n) => `Version ${a} · list ${d} · ${n} items`,
+    bPreview: 'Preview · orders are not transmitted yet', bPreviewTest: 'Preview · test orders',
+    bBefore: 'Ordering on 2 November 2026 until 11:59 pm – until then you can save your selection.',
+    bAfter: 'Ordering is closed. Merci pour votre visite.',
+    loadErr: 'The wine list could not be loaded. Please open it again with a signal – or order at the info desk in the Entrée with the paper form.',
+    region: r => ({ Burgund: 'Burgundy', Elsass: 'Alsace', Normandie: 'Normandy', Spirituosen: 'Spirits', Alkoholfrei: 'Non-alcoholic' }[r] || r)
+  }
 };
+const T = () => TXT[LANG];
+
+const KIND = { rouge: 'rouge', blanc: 'blanc', rose: 'rosé', mousseux: 'effervescent', doux: 'doux', spiritueux: 'spiritueux' };
+const kindLabel = k => k === 'sans' ? T().sans : KIND[k];
+const ROOM = { S: 'Salon Pariser Platz', M: 'Salle à Manger', E: 'Entrée' };
+const NA = { 'a.A.': 'onRequest', 'a.Z.': 'allocation' };
+// Für die Bestelldaten (Team, JTL) immer Deutsch
+const DELIV_DE = { lieferung: 'Lieferung', 'abholung-berlin': 'Abholung Berlin', 'abholung-hamburg': 'Abholung Hamburg' };
 
 /* ---------- Zustand ---------- */
 let DATA = null, WINES = [], BY = {}, ORDER_IDX = {}, B2B = null;
@@ -86,13 +274,31 @@ async function setMode(m, code) {
   renderList();
   updateCart();
   renderFoot();
-  if (dropped.length) toast(`${dropped.join(', ')} in dieser Preisansicht nicht bestellbar – entfernt`);
+  if (dropped.length) toast(T().dropped(dropped.join(', ')));
 }
 
 function applyMode() {
   document.body.classList.toggle('b2b', S.mode === 'b');
-  $('#modeLabel').textContent = S.mode === 'b' ? 'Gastronomie' : 'Privatkunden';
+  $('#modeLabel').textContent = S.mode === 'b' ? T().modeB : T().modeC;
   $('meta[name=theme-color]').content = S.mode === 'b' ? '#003B54' : '#75232A';
+}
+
+function applyLang() {
+  document.documentElement.lang = LANG;
+  const t = T(), q = $('#q');
+  q.placeholder = t.searchPh; q.setAttribute('aria-label', t.searchAria);
+  $('#tblBtn').textContent = t.tbl;
+  $('#roomAll').textContent = t.all;
+  $('#chipRated').textContent = t.rated;
+  $('#chipCart').textContent = t.inCart;
+  $('#chips [data-k=sans]').lastChild.textContent = '0 %';
+  applyMode();
+}
+
+function setLang(l) {
+  LANG = l; store.set(LS.lang, l);
+  applyLang(); renderBanner(); renderList(); updateCart(); updatePending(); renderFoot();
+  if (S.view) openView(S.view, S.viewArg, true);
 }
 
 /* ---------- Summen ---------- */
@@ -125,34 +331,35 @@ function totals(deliv = S.deliv) {
 
 /* ---------- Weinliste ---------- */
 function rateHtml(n) {
-  const r = S.rate[n] || 0;
-  let h = '<div class="rate" role="group" aria-label="Ihre Bewertung">';
-  for (let i = 1; i <= 5; i++) h += `<button data-rate="${i}" class="${i <= r ? 'on' : ''}" aria-label="${i} von 5"></button>`;
+  const r = S.rate[n] || 0, t = T();
+  let h = `<div class="rate" role="group" aria-label="${t.rateAria}">`;
+  for (let i = 1; i <= 5; i++) h += `<button data-rate="${i}" class="${i <= r ? 'on' : ''}" aria-label="${t.of5(i)}"></button>`;
   return h + '</div>';
 }
 
 function qtyHtml(n) {
-  const q = S.cart[n] || 0;
-  return `<div class="qty${q ? '' : ' zero'}"><button class="minus" data-q="-1" aria-label="Eine Flasche weniger">−</button>` +
-         `<input class="qn" type="number" inputmode="numeric" min="0" max="999" value="${q}" aria-label="Anzahl Flaschen"><button class="plus" data-q="1" aria-label="Eine Flasche mehr">${q ? '+' : '+ Fl.'}</button></div>`;
+  const q = S.cart[n] || 0, t = T();
+  return `<div class="qty${q ? '' : ' zero'}"><button class="minus" data-q="-1" aria-label="${t.less}">−</button>` +
+         `<input class="qn" type="number" inputmode="numeric" min="0" max="999" value="${q}" aria-label="${t.qtyAria}">` +
+         `<button class="plus" data-q="1" aria-label="${t.more}">${q ? '+' : t.add}</button></div>`;
 }
 
 function wineHtml(w) {
-  const p = priceOf(w);
+  const p = priceOf(w), t = T();
   let price;
   if (typeof p === 'number') {
-    const perL = S.mode === 'c' ? `<small>${money(Math.round(cents(p) / w.l))}/l</small>` : '<small>netto</small>';
+    const perL = S.mode === 'c' ? `<small>${money(Math.round(cents(p) / w.l))}${t.perL}</small>` : `<small>${t.net}</small>`;
     price = `<b>${money(cents(p))}</b>${perL}`;
   } else {
     price = `<em>${esc(p || '–')}</em>`;
   }
   const action = typeof p === 'number'
     ? qtyHtml(w.n)
-    : `<div class="ask">${NA[p] ? NA[p][0] : 'nicht verfügbar'} –<br>am Infotisch erfragen</div>`;
+    : `<div class="ask">${NA[p] ? t[NA[p]] : t.notAvail} –<br>${t.askDesk}</div>`;
   const sub = [w.v, w.l !== 0.75 ? w.u : ''].filter(Boolean).join(' · ');
   return `<article class="wine${S.cart[w.n] ? ' in' : ''}" id="w-${w.n}" data-n="${w.n}">` +
     `<div class="wine-no">${w.n}</div>` +
-    `<div class="wine-main"><div class="wine-t"><i class="sym ${w.k}" title="${KIND[w.k]}"></i>` +
+    `<div class="wine-main"><div class="wine-t"><i class="sym ${w.k}" title="${kindLabel(w.k)}"></i>` +
     `<span class="wine-n">${esc(w.w)}${w.o ? '<span class="bio">BIO</span>' : ''}${w.k === 'sans' ? '<span class="zero">0 %</span>' : ''}</span></div>` +
     (sub ? `<div class="wine-v">${esc(sub)}</div>` : '') + `</div>` +
     `<div class="wine-p">${price}</div>` +
@@ -177,7 +384,7 @@ function renderList() {
     h += `<section class="room" data-m="${m}" data-room="${m}"><div class="room-h"><h2>${ROOM[m]}</h2><span>Tables ${r.min}–${r.max}</span></div>`;
     for (const [tn, t] of r.tables) {
       h += `<div class="table" id="t-${tn}" data-t="${tn}"><div class="table-h"><div class="table-no"><small>TABLE</small><b>${tn}</b></div>` +
-           `<div class="table-name"><h3>${esc(t.doms.join(' · '))}</h3><p>${esc(t.regs.join(' · '))}</p></div></div>`;
+           `<div class="table-name"><h3>${esc(t.doms.join(' · '))}</h3><p>${esc(t.regs.map(T().region).join(' · '))}</p></div></div>`;
       for (const w of t.wines) h += wineHtml(w);
       h += '</div>';
     }
@@ -195,7 +402,8 @@ function matches(w, tokens, numeric) {
   if (S.flags.has('cart') && !S.cart[w.n]) return false;
   if (numeric) return w.n.startsWith(numeric) || w.a.replace(/\s/g, '').includes(numeric.replace('-', ''));
   if (!tokens.length) return true;
-  const hay = w._hay ||= fold([w.n, w.w, w.d, w.r, w.v, KIND[w.k], ROOM[w.m], w.o ? 'bio' : ''].join(' '));
+  // Suche in beiden Sprachen (z. B. „Burgund“ und „Burgundy“)
+  const hay = w._hay ||= fold([w.n, w.w, w.d, w.r, TXT.en.region(w.r), w.v, KIND[w.k] || 'alkoholfrei non-alcoholic', ROOM[w.m], w.o ? 'bio' : ''].join(' '));
   return tokens.every(t => hay.includes(t));
 }
 
@@ -220,8 +428,7 @@ function applyFilter() {
     any ||= secAny;
   }
   $('#empty').hidden = any;
-  $('#empty').textContent = S.flags.has('cart') && !Object.keys(S.cart).length
-    ? 'Noch keine Weine in Ihrer Bestellung.' : 'Keine Weine zu dieser Auswahl.';
+  $('#empty').textContent = S.flags.has('cart') && !Object.keys(S.cart).length ? T().emptyCart : T().emptyFilter;
 }
 
 /* ---------- Warenkorb ---------- */
@@ -241,7 +448,7 @@ function setQty(n, q) {
 function updateCart(bump) {
   const t = totals();
   $('#cartCount').textContent = t.bottles;
-  $('#cartTotal').textContent = t.bottles ? money(t.goods) : 'Bestellung';
+  $('#cartTotal').textContent = t.bottles ? money(t.goods) : T().order;
   if (bump) { const b = $('.cartbtn'); b.classList.remove('bump'); void b.offsetWidth; b.classList.add('bump'); }
 }
 
@@ -300,23 +507,24 @@ function updatePending() {
   const el = $('#pending');
   if (!n || !C.endpoint) { el.hidden = true; return; }
   el.hidden = false;
-  el.innerHTML = `<b>${n === 1 ? '1 Bestellung' : n + ' Bestellungen'} noch nicht übertragen.</b> ` +
-    `Wird automatisch gesendet, sobald Sie Empfang haben. Ansehen ›`;
+  el.innerHTML = T().pending(n);
 }
 
+/* Bestelltext für den E-Mail-Notweg – immer Deutsch, weil er beim Team ankommt */
+const FIELD_LABEL = { firma: 'Firma / Restaurant', name: 'Name / Ansprechpartner', kdnr: 'Kundennummer', ustid: 'USt-IdNr.',
+  str: 'Straße / Hausnr.', plz: 'PLZ', ort: 'Ort', tel: 'Telefon', mail: 'E-Mail' };
 function orderText(p) {
   const L = [`Bestellung ${p.code} – La Paulée de Berlin 2026`,
-    `${p.mode === 'B2B' ? 'Gastronomie & Fachhandel (netto)' : 'Privatkunden (inkl. MwSt.)'} · ${new Date(p.createdAt).toLocaleString('de-DE')}`, ''];
+    `${p.mode === 'B2B' ? 'Gastronomie & Fachhandel (netto)' : 'Privatkunden (inkl. MwSt.)'} · ${new Date(p.createdAt).toLocaleString('de-DE')} · Sprache ${p.lang || 'de'}`, ''];
   for (const i of p.items) L.push(`${i.qty} × ${i.n}  ${i.wine} – ${i.domaine}  à ${money(i.priceCents)}`);
   const t = p.totals;
-  L.push('', `Zwischensumme: ${money(t.subCents)}`, `Privilège Paulée –${C.privilegePct} %: –${money(t.discCents)}`,
-    `${DELIV[p.delivery.type][0]}: ${t.shipCents ? money(t.shipCents) : 'kostenfrei'}`,
+  L.push('', `Zwischensumme: ${money(t.subCents)}`, `Privilège Paulée –${t.privilegePct} %: –${money(t.discCents)}`,
+    `${DELIV_DE[p.delivery.type]}: ${t.shipCents ? money(t.shipCents) : 'kostenfrei'}`,
     ...(p.mode === 'B2B'
       ? [`Summe netto: ${money(t.totalCents)}`, `zzgl. ${t.vatPct} % MwSt.: ${money(t.vatCents)}`, `Gesamtbetrag brutto: ${money(t.grossCents)}`]
       : [`Summe: ${money(t.totalCents)} (darin ${t.vatPct} % MwSt.: ${money(t.vatCents)})`]), '');
-  if (p.mode === 'B2B') L.push('Bestellung zu Konditionen für Gastronomie & Fachhandel (gewerblicher Kunde bestätigt).', '');
-  const c = p.customer;
-  for (const [k, v] of Object.entries(c)) if (v) L.push(`${FIELD_LABEL[k] || k}: ${v}`);
+  if (p.mode === 'B2B') L.push('Bestellung zu Konditionen für Gastronomie & Fachhandel (Betrieb der Gastronomie/des Weinfachhandels bestätigt).', '');
+  for (const [k, v] of Object.entries(p.customer)) if (v) L.push(`${FIELD_LABEL[k] || k}: ${v}`);
   if (p.delivery.address) L.push(`Lieferanschrift: ${p.delivery.address}`);
   if (p.delivery.wish) L.push(`Wunschtermin: ${p.delivery.wish}`);
   if (p.note) L.push(`Bemerkung: ${p.note}`);
@@ -328,24 +536,23 @@ function mailHref(p) {
 }
 
 /* ---------- Formular ---------- */
-const FIELD_LABEL = { firma: 'Firma / Restaurant', name: 'Vor- und Nachname', kdnr: 'Kundennummer', ustid: 'USt-IdNr.',
-  str: 'Straße / Hausnr.', plz: 'PLZ', ort: 'Ort', tel: 'Telefon', mail: 'E-Mail' };
-// [key, Label, Pflicht, Breite (w = ganze Zeile, s = halbe), autocomplete, type]
+// [key, Label-Schlüssel, Pflicht, Breite (w = ganze Zeile, s = halbe), autocomplete, type]
 const FIELDS = {
-  c: [['name', 'Vor- und Nachname', 1, 'w', 'name'], ['kdnr', 'Kundennummer (falls bekannt)', 0, 'w', 'off'],
-      ['str', 'Straße / Hausnr.', 1, 'w', 'street-address'], ['plz', 'PLZ', 1, 's', 'postal-code'], ['ort', 'Ort', 1, 's', 'address-level2'],
-      ['tel', 'Telefon', 1, 's', 'tel', 'tel'], ['mail', 'E-Mail', 1, 's', 'email', 'email']],
-  b: [['firma', 'Firma / Restaurant', 1, 'w', 'organization'], ['name', 'Ansprechpartner', 1, 'w', 'name'],
-      ['mail', 'E-Mail (für die Bestätigung)', 1, 'w', 'email', 'email'],
-      ['kdnr', 'Kundennummer', 0, 's', 'off'], ['ustid', 'USt-IdNr.', 0, 's', 'off'],
-      ['str', 'Straße / Hausnr.', 0, 'w', 'street-address'], ['plz', 'PLZ', 0, 's', 'postal-code'], ['ort', 'Ort', 0, 's', 'address-level2'],
-      ['tel', 'Telefon', 0, 'w', 'tel', 'tel']]
+  c: [['name', 'name', 1, 'w', 'name'], ['kdnr', 'kdnrC', 0, 'w', 'off'],
+      ['str', 'str', 1, 'w', 'street-address'], ['plz', 'plz', 1, 's', 'postal-code'], ['ort', 'ort', 1, 's', 'address-level2'],
+      ['tel', 'tel', 1, 's', 'tel', 'tel'], ['mail', 'mail', 1, 's', 'email', 'email']],
+  b: [['firma', 'firma', 1, 'w', 'organization'], ['name', 'contact', 1, 'w', 'name'],
+      ['mail', 'mailB', 1, 'w', 'email', 'email'],
+      ['kdnr', 'kdnr', 0, 's', 'off'], ['ustid', 'ustid', 0, 's', 'off'],
+      ['str', 'str', 0, 'w', 'street-address'], ['plz', 'plz', 0, 's', 'postal-code'], ['ort', 'ort', 0, 's', 'address-level2'],
+      ['tel', 'tel', 0, 'w', 'tel', 'tel']]
 };
 
-function fieldHtml([k, label, req, wd, ac, type], val) {
+function fieldHtml([k, lk, req, wd, ac, type], val, labelText) {
+  const label = labelText || T().f[lk];
   return `<div class="fld ${wd}"><label for="f-${k}">${esc(label)}${req ? ' <i>*</i>' : ''}</label>` +
     `<input id="f-${k}" name="${k}" type="${type || 'text'}" autocomplete="${ac}" value="${esc(val || '')}"${req ? ' required' : ''}` +
-    `${k === 'plz' ? ' inputmode="numeric"' : ''}${type === 'email' ? ' autocapitalize="off" spellcheck="false"' : ''}></div>`;
+    `${k === 'plz' || k === 'la_plz' ? ' inputmode="numeric"' : ''}${type === 'email' ? ' autocapitalize="off" spellcheck="false"' : ''}></div>`;
 }
 
 /* ---------- Ansichten im Overlay ---------- */
@@ -375,167 +582,177 @@ function closeView(fromPop) {
   if (S.reloadPending) location.reload();
 }
 
-function privHtml() {
-  return `<div class="priv"><b>Privilège Paulée</b><strong>–${C.privilegePct} %</strong>` +
-    `<span>ab der ersten Flasche · nur am 2. November 2026 bis 23:59 Uhr</span></div>`;
-}
+const privHtml = () => `<div class="priv"><b>Privilège Paulée</b><strong>–${C.privilegePct} %</strong><span>${T().privSub}</span></div>`;
+const langHtml = () => `<div class="lang" role="group" aria-label="Sprache / Language">` +
+  `<button data-lang="de" class="${LANG === 'de' ? 'on' : ''}">Deutsch</button><button data-lang="en" class="${LANG === 'en' ? 'on' : ''}">English</button></div>`;
+const stepsHtml = () => `<ol class="steps">${T().steps.map(([a, b], i) => `<li><span class="n">${i + 1}</span><span><b>${a}</b>${b}</span></li>`).join('')}</ol>`;
 
 const VIEWS = {
   welcome() {
+    const t = T();
     return ['', `<div class="welcome">
+      ${langHtml()}
       <img src="/img/logo-gold.png" alt="La Paulée de Berlin" width="500" height="155">
-      <p class="date">Lundi 2 novembre 2026 · Ambassade de France</p>
-      <p class="lead">Die Weinliste ist jetzt auf Ihrem Gerät gespeichert und funktioniert auch ohne Empfang. Merken Sie Ihre Favoriten vor und bestellen Sie bis 23:59 Uhr.</p>
+      <p class="date">${t.date}</p>
+      <p class="lead">${t.lead}</p>
+      ${stepsHtml()}
       ${privHtml()}
       <div class="choice">
-        <button class="btn c stack" data-action="pick-c">Privatkunde<small>Preise inkl. MwSt.</small></button>
-        <button class="btn b stack" data-action="pick-b">Gastronomie & Fachhandel<small>Nettopreise mit B2B-Code</small></button>
+        <button class="btn c stack" data-action="pick-c">${t.pickC}<small>${t.pickCSub}</small></button>
+        <button class="btn b stack" data-action="pick-b">${t.pickB}<small>${t.pickBSub}</small></button>
       </div>
       <div id="codeBox" hidden>${codeFormHtml()}</div>
     </div>`];
   },
+  help() {
+    return [T().howTitle, `${langHtml()}${stepsHtml()}${privHtml()}
+      <button class="btn ghost" data-action="close" style="margin-top:14px">${T().backToList}</button>`];
+  },
   mode() {
-    return ['Preisansicht', `
+    const t = T();
+    return [t.modeTitle, `
       <div class="opts">
-        <label class="opt"><input type="radio" name="m" value="c"${S.mode === 'c' ? ' checked' : ''}><span><b>Privatkunden</b><small>Preise je Flasche inkl. MwSt.</small></span></label>
-        <label class="opt"><input type="radio" name="m" value="b"${S.mode === 'b' ? ' checked' : ''}><span><b>Gastronomie & Fachhandel</b><small>Nettopreise zzgl. MwSt. – nur für gewerbliche Kunden, mit B2B-Code</small></span></label>
+        <label class="opt"><input type="radio" name="m" value="c"${S.mode === 'c' ? ' checked' : ''}><span><b>${t.pickC}</b><small>${t.modeCSub}</small></span></label>
+        <label class="opt"><input type="radio" name="m" value="b"${S.mode === 'b' ? ' checked' : ''}><span><b>${t.modeBTitle}</b><small>${t.modeBSub}</small></span></label>
       </div>
-      <div id="codeBox"${S.mode === 'b' ? ' hidden' : ' hidden'}>${codeFormHtml()}</div>`];
+      <div id="codeBox" hidden>${codeFormHtml()}</div>`];
   },
   cart() {
-    const t = totals();
-    if (!t.lines.length) {
-      return ['Ihre Bestellung', `<p class="empty" style="margin:20px 0">Noch keine Weine vorgemerkt.</p>
-        <p class="hint" style="text-align:center">Tippen Sie bei einem Wein auf <b>+ Fl.</b></p>
-        <button class="btn ghost" data-action="close" style="margin-top:20px">Zur Weinliste</button>`];
+    const t = T(), tot = totals();
+    if (!tot.lines.length) {
+      return [t.yourOrder, `<p class="empty" style="margin:20px 0">${t.noWines}</p>
+        <p class="hint" style="text-align:center">${t.tapAdd}</p>
+        <button class="btn ghost" data-action="close" style="margin-top:20px">${t.toList}</button>`];
     }
     const ws = windowState();
     let h = '<div class="lines">';
-    for (const l of t.lines) {
+    for (const l of tot.lines) {
       h += `<div class="line" data-n="${l.w.n}"><div><div class="line-t">${esc(l.w.w)}</div>` +
            `<div class="line-s">${l.w.n} · ${esc(l.w.d)} · ${money(l.pc)}</div></div>` +
            `<div class="line-r">${money(l.lc)}</div>${qtyHtml(l.w.n)}</div>`;
     }
     h += '</div>';
-    h += `<fieldset><legend>Lieferung oder Abholung · bis ${C.deliveryUntil}</legend><div class="opts">`;
-    for (const [k, [a, b]] of Object.entries(DELIV)) {
+    h += `<fieldset><legend>${t.delivLegend(C.deliveryUntil)}</legend><div class="opts">`;
+    for (const [k, [a, b]] of Object.entries(t.deliv)) {
       h += `<label class="opt"><input type="radio" name="deliv" value="${k}"${S.deliv === k ? ' checked' : ''}><span><b>${a}</b><small>${b}</small></span></label>`;
     }
-    h += `</div><p class="hint">Abholung Di.–Fr. 10.30–19.00 Uhr · Sa. 11.00–18.00 Uhr</p></fieldset>`;
-    h += sumHtml(t);
+    h += `</div><p class="hint">${t.hours}</p><p class="abroad">${t.abroad}</p></fieldset>`;
+    h += sumHtml(tot);
     if (ws === 'open') {
-      h += `<div class="submit"><button class="btn" data-action="form">Weiter zu Ihren Angaben</button></div>`;
+      h += `<div class="submit"><button class="btn" data-action="form">${t.next}</button></div>`;
     } else {
-      h += `<div class="box warn">${ws === 'before'
-        ? 'Bestellen können Sie am <b>2. November 2026 von 0:00 bis 23:59 Uhr</b>. Ihre Auswahl bleibt bis dahin auf diesem Gerät gespeichert.'
-        : 'Die Bestellung ist seit dem 2. November, 23:59 Uhr, geschlossen. Für Fragen erreichen Sie uns unter ' + esc(C.contactPhone) + '.'}</div>`;
+      h += `<div class="box warn">${ws === 'before' ? t.before : t.after(esc(C.contactPhone))}</div>`;
     }
-    return ['Ihre Bestellung', h];
+    return [t.yourOrder, h];
   },
   form() {
-    const t = totals();
+    const t = T(), tot = totals();
     const saved = store.get(LS.form, {});
     const v = saved[S.mode] || {};
+    const deliv = S.deliv === 'lieferung';
     let h = `<div class="f">${FIELDS[S.mode].map(f => fieldHtml(f, v[f[0]])).join('')}</div>`;
-    if (S.deliv === 'lieferung') {
-      h += `<label class="check"><input type="checkbox" id="f-la"${v.la ? ' checked' : ''}><span>Lieferanschrift weicht ab</span></label>
+    if (deliv) {
+      h += `<label class="check"><input type="checkbox" id="f-la"${v.la ? ' checked' : ''}><span>${t.f.laToggle}</span></label>
         <div class="f" id="laBox" style="margin-top:10px"${v.la ? '' : ' hidden'}>
-          ${fieldHtml(['la_name', 'Name / Firma', 0, 'w', 'off'], v.la_name)}
-          ${fieldHtml(['la_str', 'Straße / Hausnr.', 0, 'w', 'off'], v.la_str)}
-          ${fieldHtml(['la_plz', 'PLZ', 0, 's', 'off'], v.la_plz)}
-          ${fieldHtml(['la_ort', 'Ort', 0, 's', 'off'], v.la_ort)}
+          ${fieldHtml(['la_name', 'laName', 0, 'w', 'off'], v.la_name)}
+          ${fieldHtml(['la_str', 'str', 0, 'w', 'off'], v.la_str)}
+          ${fieldHtml(['la_plz', 'plz', 0, 's', 'off'], v.la_plz)}
+          ${fieldHtml(['la_ort', 'ort', 0, 's', 'off'], v.la_ort)}
         </div>`;
     }
     h += `<div class="f" style="margin-top:12px">
-        ${fieldHtml(['wish', `Wunschtermin ${S.deliv === 'lieferung' ? 'für die Lieferung' : 'für die Abholung'} (bis ${C.deliveryUntil})`, 0, 'w', 'off'], v.wish)}
-        <div class="fld w"><label for="f-note">Bemerkung</label><textarea id="f-note" name="note">${esc(v.note || '')}</textarea></div>
+        ${fieldHtml(['wish', '', 0, 'w', 'off'], v.wish, t.f.wish(C.deliveryUntil, deliv))}
+        <div class="fld w"><label for="f-note">${t.f.note}</label><textarea id="f-note" name="note">${esc(v.note || '')}</textarea></div>
       </div>`;
-    h += `<fieldset><legend>Zusammenfassung</legend>
-      <div class="box" style="margin:0">${fl(t.bottles)} · ${esc(DELIV[S.deliv][0])}${sumHtml(t, true)}</div></fieldset>`;
+    h += `<fieldset><legend>${t.summary}</legend>
+      <div class="box" style="margin:0">${t.fl(tot.bottles)} · ${esc(t.delivShort[S.deliv])}${sumHtml(tot, true)}</div></fieldset>`;
     if (S.mode === 'c') {
-      h += `<label class="check"><input type="checkbox" id="f-nl"${v.nl ? ' checked' : ''}><span>Ja, ich möchte den Newsletter von VISENTIN erhalten.</span></label>
-        <label class="check" id="c-adult"><input type="checkbox" id="f-adult"><span>Ich bin volljährig. <i class="req">*</i></span></label>
-        <label class="check" id="c-agb"><input type="checkbox" id="f-agb"><span>Ich akzeptiere die <a href="https://www.weine-visentin.de/AGB" target="_blank" rel="noopener">AGB</a> und habe die <a href="https://www.weine-visentin.de/Widerrufsrecht" target="_blank" rel="noopener">Widerrufsbelehrung</a> zur Kenntnis genommen. <i class="req">*</i></span></label>
-        <p class="legal">Abgabe alkoholischer Getränke nur an Volljährige. Verbraucher können ihre Bestellung binnen 14 Tagen ab Erhalt der Ware ohne Angabe von Gründen widerrufen. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung, für den Newsletter nur mit Ihrer Zustimmung – <a href="https://www.weine-visentin.de/Datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</p>`;
+      h += `<label class="check"><input type="checkbox" id="f-nl"${v.nl ? ' checked' : ''}><span>${t.nl}</span></label>
+        <label class="check" id="c-adult"><input type="checkbox" id="f-adult"><span>${t.adult} <i class="req">*</i></span></label>
+        <label class="check" id="c-agb"><input type="checkbox" id="f-agb"><span>${t.agb} <i class="req">*</i></span></label>
+        <p class="legal">${t.legalC}</p>`;
     } else {
-      h += `<label class="check" id="c-pro"><input type="checkbox" id="f-pro"><span>Ich bestelle als Unternehmer für Gastronomie oder Fachhandel. Die Nettopreise gelten ausschließlich für gewerbliche Kunden. <i class="req">*</i></span></label>
-        <p class="legal">Alle Preise netto zzgl. gesetzlicher MwSt. Es gelten unsere <a href="https://www.weine-visentin.de/AGB" target="_blank" rel="noopener">AGB für Geschäftskunden</a>. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung – <a href="https://www.weine-visentin.de/Datenschutz" target="_blank" rel="noopener">Datenschutz</a>.</p>`;
+      h += `<label class="check" id="c-pro"><input type="checkbox" id="f-pro"><span>${t.pro} <i class="req">*</i></span></label>
+        <p class="legal">${t.legalB}</p>`;
     }
     h += `<p class="err" id="formErr" hidden></p>
-      <div class="submit"><button class="btn stack" data-action="submit">${S.mode === 'c' ? 'Zahlungspflichtig bestellen' : 'Verbindlich bestellen'}<small>${S.mode === 'c' ? money(t.total) + ' inkl. MwSt.' : money(t.total) + ' netto · ' + money(t.gross) + ' brutto'}</small></button></div>`;
-    return ['Ihre Angaben', h, 'cart'];
+      <div class="submit"><button class="btn stack" data-action="submit">${S.mode === 'c' ? t.buyC : t.buyB}<small>${S.mode === 'c' ? money(tot.total) + ' ' + t.inclVat : t.netGross(money(tot.total), money(tot.gross))}</small></button></div>`;
+    return [t.formTitle, h, 'cart'];
   },
   done(id) {
+    const t = T();
     const o = orders().find(x => x.id === id);
-    if (!o) return ['Bestellung', '<p class="empty">Nicht gefunden.</p>'];
+    if (!o) return [t.doneTitle, `<p class="empty">${t.notFound}</p>`];
     const p = o.payload, sent = o.status === 'sent', test = !C.endpoint;
+    const bottles = p.items.reduce((a, i) => a + i.qty, 0);
     let h = `<div class="done"><div class="mark${sent ? '' : ' wait'}">${sent ? '✓' : '…'}</div>
       <h3>Merci${p.customer.name ? ', ' + esc(p.customer.name.split(' ')[0]) : ''}.</h3>
-      <p>Ihre Bestellnummer</p><div class="no">${p.code}</div>
-      <p style="color:var(--muted);font-size:13px">${fl(p.items.reduce((a, i) => a + i.qty, 0))} · ${p.mode === 'B2B' ? money(p.totals.totalCents) + ' netto · ' + money(p.totals.grossCents) + ' brutto' : money(p.totals.totalCents) + ' inkl. MwSt.'}</p>`;
+      <p>${t.yourNo}</p><div class="no">${p.code}</div>
+      <p style="color:var(--muted);font-size:13px">${t.fl(bottles)} · ${p.mode === 'B2B' ? t.netGross(money(p.totals.totalCents), money(p.totals.grossCents)) : money(p.totals.totalCents) + ' ' + t.inclVat}</p>`;
     if (sent) {
-      h += `<p>Ihre Bestellung ist bei uns eingegangen. Sie erhalten eine Bestätigung an <b>${esc(p.customer.mail)}</b>; wegen ${p.delivery.type === 'lieferung' ? 'der Lieferung' : 'der Abholung'} melden wir uns bei Ihnen.</p>`;
+      h += `<p>${t.sentMsg(esc(p.customer.mail), p.delivery.type === 'lieferung')}</p>`;
     } else if (test) {
-      h += `<div class="box warn"><b>Testbetrieb.</b> Die Bestellung ist auf diesem Gerät gespeichert, wird aber noch nicht übertragen.</div>`;
+      h += `<div class="box warn">${t.testMsg}</div>`;
     } else {
-      h += `<div class="box warn"><b>Noch nicht übertragen – kein Empfang.</b><br>
-        Ihre Bestellung ist auf diesem Gerät sicher gespeichert und wird automatisch gesendet, sobald Sie Empfang haben – spätestens, wenn Sie diese Seite nach dem Verlassen der Botschaft noch einmal öffnen.</div>
-        <button class="btn" data-action="retry">Jetzt senden</button>
-        <a class="btn ghost" style="margin-top:8px" href="${esc(mailHref(p))}">Stattdessen per E-Mail senden</a>
-        <p class="hint">Die E-Mail wartet im Postausgang und geht automatisch raus, sobald Sie Empfang haben. Bitte nur eine der beiden Möglichkeiten nutzen.</p>`;
+      h += `<div class="box warn">${t.waitMsg}</div>
+        <button class="btn" data-action="retry">${t.sendNow}</button>
+        <a class="btn ghost" style="margin-top:8px" href="${esc(mailHref(p))}">${t.byMail}</a>
+        <p class="hint">${t.mailHint}</p>`;
     }
-    h += `<button class="btn ghost" data-action="close" style="margin-top:14px">Zurück zur Weinliste</button></div>`;
-    return ['Vielen Dank', h];
+    h += `<button class="btn ghost" data-action="close" style="margin-top:14px">${t.backToList}</button></div>`;
+    return [t.doneTitle, h];
   },
   orders() {
-    const list = orders().slice().reverse();
-    if (!list.length) return ['Meine Bestellungen', '<p class="empty">Noch keine Bestellungen auf diesem Gerät.</p>'];
+    const t = T(), list = orders().slice().reverse();
+    if (!list.length) return [t.ordersTitle, `<p class="empty">${t.noOrders}</p>`];
     let h = '<div class="orders">';
     for (const o of list) {
       const p = o.payload;
-      const pill = o.status === 'sent' ? '<span class="pill">übertragen</span>'
-        : !C.endpoint ? '<span class="pill test">Test</span>' : '<span class="pill wait">wartet</span>';
+      const pill = o.status === 'sent' ? `<span class="pill">${t.pillSent}</span>`
+        : !C.endpoint ? `<span class="pill test">${t.pillTest}</span>` : `<span class="pill wait">${t.pillWait}</span>`;
       h += `<div class="o" data-action="show-order" data-id="${o.id}" role="button" tabindex="0"><div><b>${p.code}</b>` +
-           `<small>${new Date(p.createdAt).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })} · ${p.items.reduce((a, i) => a + i.qty, 0)} Fl. · ${money(p.totals.totalCents)}</small></div>${pill}</div>`;
+           `<small>${new Date(p.createdAt).toLocaleString(LANG === 'de' ? 'de-DE' : 'en-GB', { dateStyle: 'short', timeStyle: 'short' })} · ${p.items.reduce((a, i) => a + i.qty, 0)} ${t.flShort} · ${money(p.totals.totalCents)}</small></div>${pill}</div>`;
     }
     h += '</div>';
-    if (list.some(o => o.status === 'pending') && C.endpoint) h += '<button class="btn" data-action="retry" style="margin-top:16px">Jetzt senden</button>';
-    return ['Meine Bestellungen', h];
+    if (list.some(o => o.status === 'pending') && C.endpoint) h += `<button class="btn" data-action="retry" style="margin-top:16px">${t.sendNow}</button>`;
+    return [t.ordersTitle, h];
   }
 };
 
 function codeFormHtml() {
-  return `<p class="hint" style="text-align:left;margin-top:16px">Die Nettopreise gelten <b>ausschließlich für Kunden aus Gastronomie und Fachhandel</b>. Ihren B2B-Code finden Sie auf dem B2B-Bestellformular und in unserer E-Mail an Sie.</p>
-    <form class="code" data-form="code"><input id="codeIn" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="B2B-Code" aria-label="B2B-Code">
-    <button class="btn b small" style="width:auto">Freischalten</button></form><p class="err" id="codeErr" hidden></p>`;
+  const t = T();
+  return `<p class="hint" style="text-align:left;margin-top:16px">${t.codeHint}</p>
+    <form class="code" data-form="code"><input id="codeIn" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="${t.codePh}" aria-label="${t.codePh}">
+    <button class="btn b small" style="width:auto">${t.unlock}</button></form><p class="err" id="codeErr" hidden></p>`;
 }
 
-function sumHtml(t, compact) {
-  const vat = S.mode === 'c' ? 'Alle Preise inkl. MwSt.' : 'Alle Preise netto zzgl. MwSt.';
+function sumHtml(tot, compact) {
+  const t = T();
+  const vatNote = S.mode === 'c' ? t.allIncl : t.allNet;
   let shipNote = '';
   if (S.deliv === 'lieferung') {
     shipNote = S.mode === 'c'
-      ? `Versandkostenfrei ab ${money(cents(C.b2cFreeFrom))}, sonst ${money(cents(C.b2cParcel))} je Paket (bis ${C.b2cParcelSize} Fl.).`
-      : `Frei Haus ab ${money(cents(C.b2bFreeFrom))} netto, sonst ${money(cents(C.b2bPerBottle))} je Flasche, mind. ${money(cents(C.b2bMin))}.`;
+      ? t.shipNoteC(money(cents(C.b2cFreeFrom)), money(cents(C.b2cParcel)), C.b2cParcelSize)
+      : t.shipNoteB(money(cents(C.b2bFreeFrom)), money(cents(C.b2bPerBottle)), money(cents(C.b2bMin)));
   }
   return `<div class="sum">
-    <div><span>Zwischensumme</span><span>${money(t.sub)}</span></div>
-    <div class="p"><span>Privilège Paulée –${C.privilegePct} %</span><span>–${money(t.disc)}</span></div>
-    <div><span>${S.deliv === 'lieferung' ? 'Versand' : 'Abholung'}</span><span>${t.ship ? money(t.ship) : 'kostenfrei'}</span></div>
+    <div><span>${t.sub}</span><span>${money(tot.sub)}</span></div>
+    <div class="p"><span>${t.priv(C.privilegePct)}</span><span>–${money(tot.disc)}</span></div>
+    <div><span>${S.deliv === 'lieferung' ? t.ship : t.pickup}</span><span>${tot.ship ? money(tot.ship) : t.free}</span></div>
     ${S.mode === 'c'
-      ? `<div class="t"><span>Summe</span><span>${money(t.total)}</span></div>
-         <div class="v"><span>darin enthalten ${C.vatPct} % MwSt.</span><span>${money(t.vat)}</span></div>`
-      : `<div class="tn"><span>Summe netto</span><span>${money(t.total)}</span></div>
-         <div class="v"><span>zzgl. ${C.vatPct} % MwSt.</span><span>${money(t.vat)}</span></div>
-         <div class="t"><span>Gesamtbetrag brutto</span><span>${money(t.gross)}</span></div>`}
-    <div class="n"><span>${vat}${compact ? '' : ' ' + shipNote}</span></div></div>`;
+      ? `<div class="t"><span>${t.total}</span><span>${money(tot.total)}</span></div>
+         <div class="v"><span>${t.vatIn(C.vatPct)}</span><span>${money(tot.vat)}</span></div>`
+      : `<div class="tn"><span>${t.totalNet}</span><span>${money(tot.total)}</span></div>
+         <div class="v"><span>${t.vatPlus(C.vatPct)}</span><span>${money(tot.vat)}</span></div>
+         <div class="t"><span>${t.gross}</span><span>${money(tot.gross)}</span></div>`}
+    <div class="n"><span>${vatNote}${compact ? '' : ' ' + shipNote}</span></div></div>`;
 }
 
 /* Nachbereitung je Ansicht */
 const AFTER = {
-  welcome() {}, mode() {
+  mode() {
     $$('input[name=m]', sheet()).forEach(r => r.addEventListener('change', () => {
-      if (r.value === 'c') { setMode('c').then(() => { closeView(); toast('Preisansicht: Privatkunden'); }); }
+      if (r.value === 'c') { setMode('c').then(() => { closeView(); toast(T().toPrivate); }); }
       else { $('#codeBox').hidden = false; $('#codeIn').focus(); }
     }));
   },
@@ -585,14 +802,14 @@ function submitOrder() {
   const err = $('#formErr');
   if (bad) {
     err.hidden = false;
-    err.textContent = 'Bitte ergänzen Sie die markierten Angaben.';
+    err.textContent = T().formErr;
     bad.scrollIntoView({ block: 'center', behavior: 'smooth' });
     bad.focus({ preventScroll: true });
     return;
   }
   if (windowState() !== 'open') { openView('cart'); return; }
-  const t = totals();
-  if (!t.lines.length) { openView('cart'); return; }
+  const tot = totals();
+  if (!tot.lines.length) { openView('cart'); return; }
 
   lastSubmit = Date.now();
   const customer = {};
@@ -602,15 +819,15 @@ function submitOrder() {
   const id = uuid();
   const payload = {
     id, code: shortCode(), createdAt: new Date().toISOString(),
-    mode: S.mode === 'b' ? 'B2B' : 'B2C', preview: !!C.preview,
+    mode: S.mode === 'b' ? 'B2B' : 'B2C', lang: LANG, preview: !!C.preview,
     app: APP_VERSION, data: DATA.version,
     customer,
     delivery: { type: S.deliv, address, wish: v.wish || '' },
     newsletter: S.mode === 'c' ? !!v.nl : false,
     note: v.note || '',
-    items: t.lines.map(l => ({ n: l.w.n, art: l.w.a, wine: l.w.w, domaine: l.w.d, unit: l.w.u, qty: l.q, priceCents: l.pc, lineCents: l.lc })),
-    totals: { subCents: t.sub, discCents: t.disc, shipCents: t.ship, totalCents: t.total, vatCents: t.vat, grossCents: t.gross, vatPct: C.vatPct,
-              bottles: t.bottles, basis: S.mode === 'b' ? 'netto' : 'brutto', privilegePct: C.privilegePct },
+    items: tot.lines.map(l => ({ n: l.w.n, art: l.w.a, wine: l.w.w, domaine: l.w.d, unit: l.w.u, qty: l.q, priceCents: l.pc, lineCents: l.lc })),
+    totals: { subCents: tot.sub, discCents: tot.disc, shipCents: tot.ship, totalCents: tot.total, vatCents: tot.vat, grossCents: tot.gross, vatPct: C.vatPct,
+              bottles: tot.bottles, basis: S.mode === 'b' ? 'netto' : 'brutto', privilegePct: C.privilegePct },
     businessConfirmed: S.mode === 'b'
   };
   saveOrder({ id, status: 'pending', payload });
@@ -622,31 +839,32 @@ function submitOrder() {
 
 /* ---------- Footer ---------- */
 function renderFoot(ready) {
+  const t = T();
   const cached = ready === undefined ? $('#foot')?.dataset.ready === '1' : ready;
   $('#foot').dataset.ready = cached ? '1' : '';
   const ship = S.mode === 'c'
-    ? `Innerhalb Deutschlands ab ${money(cents(C.b2cFreeFrom))} versandkostenfrei, sonst ${money(cents(C.b2cParcel))} je Paket (bis ${C.b2cParcelSize} Fl.). Preise inkl. MwSt.`
-    : `Innerhalb Deutschlands frei Haus ab ${money(cents(C.b2bFreeFrom))} netto, darunter ${money(cents(C.b2bPerBottle))} je Flasche, mindestens ${money(cents(C.b2bMin))}. Preise netto zzgl. MwSt.`;
+    ? t.footShipC(money(cents(C.b2cFreeFrom)), money(cents(C.b2cParcel)), C.b2cParcelSize)
+    : t.footShipB(money(cents(C.b2bFreeFrom)), money(cents(C.b2bPerBottle)), money(cents(C.b2bMin)));
+  const links = [...t.links, ...(S.mode === 'c' ? [t.withdrawal] : [])].map(([p, l]) => link(p, l)).join('\n      ');
   $('#foot').innerHTML = `
-    <p><span class="status${cached ? '' : ' wait'}">${cached ? 'Weinliste offline gespeichert' : 'Weinliste wird gespeichert …'}</span></p>
+    <p><span class="status${cached ? '' : ' wait'}">${cached ? t.offlineOk : t.offlineWait}</span></p>
     <h4>Privilège Paulée</h4>
-    <p>–${C.privilegePct} % ab der ersten Flasche auf alle Bestellungen am 2. November 2026 bis 23:59 Uhr. Weine auf Anfrage (a.A.) oder auf Zuteilung (a.Z.) sind digital nicht bestellbar – bitte am Infotisch erfragen.</p>
-    <h4>Infotisch · Entrée</h4>
-    <p>Bestellannahme, Beratung, Fragen zu Weinen, Konditionen und Lieferung. Dort können Sie auch mit Katalog oder Papierformular bestellen – bitte nur einen Weg nutzen.</p>
-    <h4>Lieferung & Abholung bis ${C.deliveryUntil}</h4>
-    <p>${ship}</p>
-    <p>Abholung kostenfrei bei VISENTIN – Passion Vin: Berlin, Köpenicker Straße 18–20 · Hamburg, Große Elbstraße 131 · Di.–Fr. 10.30–19.00 Uhr, Sa. 11.00–18.00 Uhr.</p>
+    <p>${t.footPriv(C.privilegePct)}</p>
+    <h4>${t.deskH}</h4>
+    <p>${t.desk}</p>
+    <h4>${t.shipH(C.deliveryUntil)}</h4>
+    <p>${ship} ${t.abroad}</p>
+    <p>${t.footPickup}</p>
     <div class="links">
-      <button data-action="orders">Meine Bestellungen</button>
-      <button data-action="mode">Preisansicht wechseln</button>
-      <a href="https://www.weine-visentin.de/Impressum" target="_blank" rel="noopener">Impressum</a>
-      <a href="https://www.weine-visentin.de/Datenschutz" target="_blank" rel="noopener">Datenschutz</a>
-      <a href="https://www.weine-visentin.de/AGB" target="_blank" rel="noopener">AGB</a>
-      ${S.mode === 'c' ? '<a href="https://www.weine-visentin.de/Widerrufsrecht" target="_blank" rel="noopener">Widerrufsrecht</a>' : ''}
+      <button data-action="help">${t.howTitle}</button>
+      <button data-action="orders">${t.ordersTitle}</button>
+      <button data-action="mode">${t.switchMode}</button>
+      <button data-lang="${LANG === 'de' ? 'en' : 'de'}">${t.other}</button>
+      ${links}
     </div>
     <p style="margin-top:18px">VISENTIN – Vins Français d'Exception · Köpenicker Straße 18–20 · 10997 Berlin<br>
     <a href="tel:${C.contactPhone.replace(/\s/g, '')}">${esc(C.contactPhone)}</a> · <a href="mailto:${C.contactMail}">${C.contactMail}</a></p>
-    <p style="opacity:.6;font-size:11px">Version ${APP_VERSION} · Liste ${DATA.version} · ${DATA.count} Positionen</p>`;
+    <p style="opacity:.6;font-size:11px">${t.version(APP_VERSION, DATA.version, DATA.count)}</p>`;
 }
 
 /* ---------- Ereignisse ---------- */
@@ -664,17 +882,19 @@ async function tryCode(form) {
     await setMode('b', input.value);
     store.set(LS.seen, 1);
     closeView();
-    toast('Nettopreise freigeschaltet');
+    toast(T().unlocked);
   } catch {
     err.hidden = false;
-    err.textContent = 'Dieser Code ist nicht gültig. Bitte prüfen Sie die Schreibweise.';
+    err.textContent = T().codeBad;
     input.select();
   } finally { btn.disabled = false; }
 }
 
 function bind() {
   document.addEventListener('click', e => {
-    const a = e.target.closest('[data-action]');
+    // Sprache
+    const lb = e.target.closest('[data-lang]');
+    if (lb) { e.preventDefault(); setLang(lb.dataset.lang); return; }
     // Mengen & Bewertung in der Liste und im Warenkorb
     const qb = e.target.closest('[data-q]');
     if (qb) {
@@ -692,19 +912,26 @@ function bind() {
       $$('button', rb.parentNode).forEach((b, i) => b.classList.toggle('on', i < (S.rate[n] || 0)));
       return;
     }
+    const a = e.target.closest('[data-action]');
     if (!a) return;
     const act = a.dataset.action;
-    if (act !== 'home') e.preventDefault();
+    e.preventDefault();
     switch (act) {
-      case 'home': e.preventDefault(); window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+      case 'home': window.scrollTo({ top: 0, behavior: 'smooth' }); break;
+      case 'tbl': {
+        const q = $('#q');
+        q.setAttribute('inputmode', 'numeric'); q.value = ''; S.q = ''; applyFilter(); q.focus();
+        break;
+      }
       case 'cart': openView('cart'); break;
       case 'mode': openView('mode'); break;
+      case 'help': openView('help'); break;
       case 'orders': openView('orders'); break;
       case 'form': openView('form'); break;
       case 'submit': submitOrder(); break;
       case 'close': closeView(); break;
       case 'back': openView(a.dataset.to); break;
-      case 'retry': toast('Wird gesendet …'); flush(); break;
+      case 'retry': toast(T().sending); flush(); break;
       case 'show-order': openView('done', a.dataset.id); break;
       case 'pick-c': store.set(LS.seen, 1); setMode('c').then(closeView); break;
       case 'pick-b': $('#codeBox').hidden = false; $('#codeIn').focus(); break;
@@ -719,10 +946,13 @@ function bind() {
   });
 
   let qt;
-  $('#q').addEventListener('input', e => {
+  const q = $('#q');
+  q.addEventListener('input', e => {
     clearTimeout(qt);
     qt = setTimeout(() => { S.q = e.target.value; applyFilter(); }, 110);
   });
+  // Zifferntastatur nur für die Tischnummer, danach wieder normale Tastatur
+  q.addEventListener('blur', () => q.setAttribute('inputmode', 'search'));
   $('#rooms').addEventListener('click', e => {
     const b = e.target.closest('button'); if (!b) return;
     S.room = b.dataset.room;
@@ -766,11 +996,11 @@ function bind() {
 
 /* ---------- Banner & Offline ---------- */
 function renderBanner() {
-  const b = $('#banner'), ws = windowState();
+  const b = $('#banner'), ws = windowState(), t = T();
   let msg = '';
-  if (C.preview) msg = C.endpoint ? 'Vorschau · Testbestellungen' : 'Vorschau · Bestellungen werden noch nicht übertragen';
-  else if (ws === 'before') msg = 'Bestellung am 2. November 2026 bis 23:59 Uhr – bis dahin können Sie Weine vormerken.';
-  else if (ws === 'after') msg = 'Die Bestellung ist geschlossen. Merci pour votre visite.';
+  if (C.preview) msg = C.endpoint ? t.bPreviewTest : t.bPreview;
+  else if (ws === 'before') msg = t.bBefore;
+  else if (ws === 'after') msg = t.bAfter;
   b.hidden = !msg; b.textContent = msg;
 }
 
@@ -802,11 +1032,12 @@ function registerSW() {
 /* ---------- Start ---------- */
 async function start() {
   bind();
+  applyLang();
   try {
     const r = await fetch('/data.json');
     DATA = await r.json();
   } catch {
-    $('#list').innerHTML = '<p class="empty">Die Weinliste konnte nicht geladen werden. Bitte mit Empfang erneut öffnen – oder am Infotisch in der Entrée mit dem Papierformular bestellen.</p>';
+    $('#list').innerHTML = `<p class="empty">${T().loadErr}</p>`;
     return;
   }
   WINES = DATA.wines;

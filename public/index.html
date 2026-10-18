@@ -32,12 +32,13 @@
   </div>
   <button id="pending" class="pending" data-action="orders" hidden></button>
   <div class="tools">
-    <label class="search">
+    <div class="search">
       <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="M13 13l4.5 4.5"/></svg>
-      <input id="q" type="search" inputmode="search" placeholder="Tisch, Wein-Nr., Domaine, Rebsorte …" autocomplete="off" aria-label="Suche">
-    </label>
+      <input id="q" type="search" inputmode="search" placeholder="Tischnummer (z. B. 128), Wein oder Domaine" autocomplete="off" aria-label="Suche">
+      <button class="tbl" id="tblBtn" data-action="tbl" type="button">Tisch-Nr.</button>
+    </div>
     <nav class="rooms" id="rooms" aria-label="Räume">
-      <button data-room="" class="on">Alle</button>
+      <button data-room="" class="on" id="roomAll">Alle</button>
       <button data-room="S">Salon</button>
       <button data-room="M">Salle à Manger</button>
       <button data-room="E">Entrée</button>
@@ -51,8 +52,8 @@
       <button data-k="spiritueux"><i class="sym spiritueux"></i>spiritueux</button>
       <button data-k="sans"><i class="sym sans"></i>0 %</button>
       <button data-f="bio"><span class="bio">BIO</span></button>
-      <button data-f="rated">Bewertet</button>
-      <button data-f="cart">In der Bestellung</button>
+      <button data-f="rated" id="chipRated">Bewertet</button>
+      <button data-f="cart" id="chipCart">In der Bestellung</button>
     </div>
   </div>
 </header>
