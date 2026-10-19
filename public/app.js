@@ -1003,7 +1003,15 @@ function bind() {
   const q = $('#q');
   q.addEventListener('input', e => {
     clearTimeout(qt);
-    qt = setTimeout(() => { S.q = e.target.value; applyFilter(); }, 110);
+    qt = setTimeout(() => {
+      S.q = e.target.value; applyFilter();
+      // Ziffernblock (Taste „Tisch-Nr.“) hat keine Eingabetaste: nach einer vollständigen Tischnummer Tastatur schließen
+      if (q.getAttribute('inputmode') === 'numeric' && /^\d{3}$/.test(q.value.trim())) q.blur();
+    }, 110);
+  });
+  // Eingabetaste („Suchen“, „Weiter“, „Enter“) schließt die Tastatur und zeigt die Treffer
+  q.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); clearTimeout(qt); S.q = q.value; applyFilter(); q.blur(); }
   });
   // Zifferntastatur nur für die Tischnummer, danach wieder normale Tastatur
   q.addEventListener('blur', () => q.setAttribute('inputmode', 'search'));
