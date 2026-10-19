@@ -222,7 +222,7 @@ function appendOrder(sh, shI, p, test) {
   const c = p.customer;
   const name = fullName(c);
   const kunde = c.firma ? c.firma + ' – ' + name : name;
-  const rows = p.items.map(i => [p.code, p.mode, txt(kunde), i.n, i.art, i.wine, i.domaine, i.unit, i.qty,
+  const rows = p.items.map(i => [p.jtlNo || p.code, p.mode, txt(kunde), i.n, i.art, i.wine, i.domaine, i.unit, i.qty,
     eur(i.priceCents), eur(i.lineCents || i.priceCents * i.qty), p.id]);
   const start = shI.getLastRow() + 1;
   shI.getRange(start, 1, rows.length, ITEM_COLS.length).setValues(rows);
@@ -407,9 +407,109 @@ function onOpen() {
     .addSeparator()
     .addItem('Bestätigung erneut senden (markierte Zeile)', 'erneutSenden')
     .addSeparator()
+    .addItem('Tabelle prüfen', 'tabellePruefen')
     .addItem('Einrichtung prüfen', 'einrichten')
     .addItem('Test-Mail an mich senden', 'testMail')
     .addToUi();
+}
+
+/**
+ * Menü „Tabelle prüfen“: prüft alle Bestellungen und Positionen gegen die gespeicherten Bestelldaten (Spalte „Daten“).
+ * Korrigiert automatisch nur Sicheres: fehlende Kästchen „In JTL erfasst“, Zahlenformate, fehlende Positionszeilen.
+ * Beträge werden nie überschrieben – Abweichungen (z. B. vom Team geänderter Versand) werden nur gemeldet.
+ */
+function tabellePruefen() {
+  const ss = SpreadsheetApp.getActive(), out = [];
+  [[SHEETS.orders, SHEETS.items, false], [SHEETS.testOrders, SHEETS.testItems, true]].forEach(([on, inn, test]) => {
+    const sh = ss.getSheetByName(on), shI = ss.getSheetByName(inn);
+    if (!sh || !shI) { if (!test) out.push('„' + on + '“ oder „' + inn + '“ fehlt → Menü „Einrichtung prüfen“.'); return; }
+    out.push(checkSheets(sh, shI, test));
+  });
+  const msg = out.join('\n\n');
+  Logger.log(msg);
+  try { SpreadsheetApp.getUi().alert('Tabelle prüfen', msg, SpreadsheetApp.getUi().ButtonSet.OK); } catch (e) {}
+  return msg;
+}
+
+function checkSheets(sh, shI, test) {
+  const name = sh.getName(), fixed = [], issues = [];
+  const headO = sh.getRange(1, 1, 1, Math.max(sh.getLastColumn(), 1)).getValues()[0].filter(String);
+  const headI = shI.getRange(1, 1, 1, Math.max(shI.getLastColumn(), 1)).getValues()[0].filter(String);
+  if (headO.join('|') !== ORDER_COLS.join('|')) issues.push('Spaltenköpfe „' + name + '“ weichen ab → Menü „Einrichtung prüfen“.');
+  if (headI.join('|') !== ITEM_COLS.join('|')) issues.push('Spaltenköpfe „' + shI.getName() + '“ weichen ab → Menü „Einrichtung prüfen“.');
+  if (issues.length) return '■ ' + name + '\n' + issues.join('\n');
+
+  const data = sh.getLastRow() > 1 ? sh.getRange(2, 1, sh.getLastRow() - 1, ORDER_COLS.length).getValues() : [];
+  const itemData = shI.getLastRow() > 1 ? shI.getRange(2, 1, shI.getLastRow() - 1, ITEM_COLS.length).getValues() : [];
+  const ix = n => ORDER_COLS.indexOf(n), iy = n => ITEM_COLS.indexOf(n);
+  const byId = {};
+  itemData.forEach(r => { const id = r[iy('ID')]; if (id) (byId[id] = byId[id] || []).push(r); });
+
+  const dv = data.length ? sh.getRange(2, COL('In JTL erfasst'), data.length, 1).getDataValidations() : [];
+  const isBox = d => d && d.getCriteriaType() === SpreadsheetApp.DataValidationCriteria.CHECKBOX;
+  const seenId = {}, seenNo = {}, near = (a, b) => Math.abs((Number(a) || 0) - (Number(b) || 0)) < 0.006;
+  let n = 0;
+  data.forEach((r, k) => {
+    const row = k + 2, id = r[ix('ID')], no = r[ix('Bestellnr.')];
+    if (!id) { if (r.some(String)) issues.push('Zeile ' + row + ': ohne ID – nicht von der App angelegt?'); return; }
+    n++;
+    const tag = 'Zeile ' + row + ' (' + no + ')';
+    if (seenId[id]) issues.push(tag + ': doppelt (gleiche ID wie Zeile ' + seenId[id] + ').'); else seenId[id] = row;
+    if (seenNo[no] && !String(r[ix('Hinweis')]).includes('doppelt')) issues.push(tag + ': Bestellnr. auch in Zeile ' + seenNo[no] + '.');
+    seenNo[no] = seenNo[no] || row;
+    let p;
+    try { p = JSON.parse(r[ix('Daten')]); } catch (e) { issues.push(tag + ': Spalte „Daten“ beschädigt – Bestellung kann nicht exportiert werden.'); return; }
+    if (p.id !== id) issues.push(tag + ': ID passt nicht zu „Daten“.');
+    if (p.code !== no) issues.push(tag + ': Bestellnr. passt nicht zu „Daten“ (' + p.code + ').');
+
+    // Kästchen und Formate
+    if (!isBox(dv[k][0])) {
+      const cb = sh.getRange(row, COL('In JTL erfasst')), v = r[ix('In JTL erfasst')];
+      cb.insertCheckboxes(); cb.setValue(v === true || /^(true|wahr|ja|x)$/i.test(String(v)));
+      fixed.push(tag + ': Kästchen „In JTL erfasst“ ergänzt.');
+    }
+
+    // Beträge gegen die Bestelldaten (nur melden)
+    const v = orderValues(p, test);
+    ['Typ', 'Flaschen', 'Zwischensumme', 'Privilège', 'Gesamt netto', 'MwSt.', 'Gesamt brutto'].forEach(c => {
+      const a = r[ix(c)], b = v[c];
+      if (typeof b === 'number' ? !near(a, b) : String(a) !== String(b)) issues.push(tag + ': „' + c + '“ = ' + a + ', laut Bestellung ' + b + '.');
+    });
+    if (!near(r[ix('Versand')], v['Versand'])) issues.push(tag + ': Versand in der Tabelle geändert (' + r[ix('Versand')] + ' statt ' + v['Versand'] + ' laut Bestellung). Der Export übernimmt den geänderten Wert in die Anmerkung, die Summen bleiben auf dem Stand der Bestellung.');
+    const t = p.totals, items = p.items || [];
+    const sub = items.reduce((a, i) => a + i.priceCents * i.qty, 0);
+    if (sub !== t.subCents) issues.push(tag + ': Positionen ergeben ' + money(sub) + ', Zwischensumme ' + money(t.subCents) + '.');
+    if (t.subCents - t.discCents + t.shipCents !== t.totalCents) issues.push(tag + ': Summe rechnerisch abweichend.');
+    if (t.grossCents !== (p.mode === 'B2B' ? t.totalCents + t.vatCents : t.totalCents)) issues.push(tag + ': Brutto/MwSt. rechnerisch abweichend.');
+    if (!p.items.every(i => i.art)) issues.push(tag + ': Position ohne Artikelnummer – in JTL von Hand prüfen.');
+
+    // Positionen
+    const pos = byId[id] || [];
+    if (!pos.length) {
+      const c = p.customer, kunde = c.firma ? c.firma + ' – ' + fullName(c) : fullName(c);
+      const rows = items.map(i => [p.jtlNo || p.code, p.mode, txt(kunde), i.n, i.art, i.wine, i.domaine, i.unit, i.qty,
+        eur(i.priceCents), eur(i.lineCents || i.priceCents * i.qty), p.id]);
+      if (rows.length) {
+        const start = shI.getLastRow() + 1;
+        shI.getRange(start, 1, rows.length, ITEM_COLS.length).setValues(rows);
+        shI.getRange(start, 10, rows.length, 2).setNumberFormat('#,##0.00 €');
+        fixed.push(tag + ': ' + rows.length + ' fehlende Positionen ergänzt.');
+      }
+    } else {
+      if (pos.length !== items.length) issues.push(tag + ': ' + pos.length + ' Positionszeilen, Bestellung hat ' + items.length + '.');
+      const qty = pos.reduce((a, x) => a + (Number(x[iy('Menge')]) || 0), 0);
+      if (qty !== t.bottles) issues.push(tag + ': Positionen ' + qty + ' Fl., Bestellung ' + t.bottles + ' Fl.');
+      const sum = pos.reduce((a, x) => a + (Number(x[iy('Summe')]) || 0), 0);
+      if (!near(sum, eur(t.subCents))) issues.push(tag + ': Positionen ergeben ' + sum.toFixed(2) + ' €, Zwischensumme ' + eur(t.subCents).toFixed(2) + ' €.');
+    }
+    delete byId[id];
+  });
+  if (data.length) formatOrderRows(sh, 2, data.length);
+  Object.keys(byId).forEach(id => issues.push('Positionen ohne Bestellung (ID ' + id.slice(0, 8) + '…, Bestellnr. ' + byId[id][0][iy('Bestellnr.')] + ').'));
+
+  return '■ ' + name + ': ' + n + ' Bestellungen, ' + itemData.length + ' Positionen geprüft.' +
+    (fixed.length ? '\nKorrigiert:\n– ' + fixed.join('\n– ') : '') +
+    (issues.length ? '\nBitte prüfen:\n– ' + issues.join('\n– ') : '\nKeine Auffälligkeiten.');
 }
 
 /** Einmal ausführen: legt die Blätter an und prüft den Brevo-Schlüssel. */
