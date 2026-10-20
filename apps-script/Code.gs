@@ -437,6 +437,7 @@ function onOpen() {
     .addItem('Bestätigung erneut senden (markierte Zeile)', 'erneutSenden')
     .addSeparator()
     .addItem('Tabelle prüfen', 'tabellePruefen')
+    .addItem('Abgleich mit JTL', 'abgleichJtl')
     .addItem('Einrichtung prüfen', 'einrichten')
     .addItem('Test-Mail an mich senden', 'testMail')
     .addToUi();
@@ -543,6 +544,84 @@ function checkSheets(sh, shI, test) {
     (open.length ? '\nNoch nicht erledigt, Häkchen „In JTL erfasst“ fehlt (' + open.length + '): ' + open.join(', ') : '') +
     (fixed.length ? '\nKorrigiert:\n– ' + fixed.join('\n– ') : '') +
     (issues.length ? '\nBitte prüfen:\n– ' + issues.join('\n– ') : '\nKeine Auffälligkeiten.');
+}
+
+/**
+ * Menü „Abgleich mit JTL“ (Kontrolle nach der Veranstaltung).
+ * Reiter „JTL-Aufträge“: aus JTL kopierte Auftragsliste (beliebige Spalten), Reiter „E-Mail-Bestellungen“: Nummern der
+ * E-Mails an info@. Gesucht wird nach Nummern der Form P-XXXXXX bzw. P-XXXXXX-2. Ergebnis im Reiter „Abgleich-Ergebnis“.
+ */
+const AB = { jtl: 'JTL-Aufträge', mail: 'E-Mail-Bestellungen', out: 'Abgleich-Ergebnis' };
+function abgleichJtl() {
+  const ss = SpreadsheetApp.getActive(), ui = SpreadsheetApp.getUi();
+  const prep = (name, head, hint) => {
+    let sh = ss.getSheetByName(name);
+    if (sh) return [sh, false];
+    sh = ss.insertSheet(name);
+    sh.getRange('A1').setValue(head).setFontWeight('bold').setBackground('#F3D9A4');
+    sh.getRange('A2').setValue(hint).setFontColor('#857E78');
+    sh.setColumnWidth(1, 320); sh.setFrozenRows(2);
+    return [sh, true];
+  };
+  const [shJ, newJ] = prep(AB.jtl, 'Aufträge aus JTL mit Auftragsnummer P-…', 'Ab Zeile 3 einfügen – ganze Zeilen aus der JTL-Auftragsliste genügen.');
+  const [shM, newM] = prep(AB.mail, 'Bestellnummern der E-Mails „Paulée-Bestellung P-…“ an info@', 'Ab Zeile 3 einfügen – eine Nummer oder ein Betreff je Zeile.');
+  if (newJ || newM) {
+    ui.alert('Abgleich mit JTL', 'Die Reiter „' + AB.jtl + '“ und „' + AB.mail + '“ sind angelegt.\n\n' +
+      '1. „' + AB.jtl + '“: Auftragsliste aus JTL ab Zeile 3 einfügen.\n2. „' + AB.mail + '“: Bestellnummern der E-Mails ab Zeile 3 einfügen.\n\nDanach den Menüpunkt erneut starten.', ui.ButtonSet.OK);
+    ss.setActiveSheet(shJ);
+    return;
+  }
+  const pat = /(?<![A-Z0-9])P-[A-Z0-9]{5,6}(?:-\d+)?/g;
+  const grab = sh => {
+    const set = new Set();
+    if (sh.getLastRow() < 3) return set;
+    sh.getRange(3, 1, sh.getLastRow() - 2, Math.max(sh.getLastColumn(), 1)).getDisplayValues()
+      .forEach(r => r.forEach(c => (String(c).toUpperCase().match(pat) || []).forEach(x => set.add(x))));
+    return set;
+  };
+  const jtl = grab(shJ), mails = grab(shM);
+  if (!jtl.size) return ui.alert('Abgleich mit JTL', 'Im Reiter „' + AB.jtl + '“ stehen noch keine Auftragsnummern P-….', ui.ButtonSet.OK);
+
+  const ord = ss.getSheetByName(SHEETS.orders);
+  const data = ord.getLastRow() > 1 ? ord.getRange(2, 1, ord.getLastRow() - 1, ORDER_COLS.length).getValues() : [];
+  const ix = n => ORDER_COLS.indexOf(n);
+  const app = new Map();
+  data.forEach(r => {
+    if (!r[ix('ID')]) return;
+    let p = {}; try { p = JSON.parse(r[ix('Daten')]); } catch (e) {}
+    const no = String(p.jtlNo || r[ix('Bestellnr.')]).toUpperCase();
+    app.set(no, { kunde: [r[ix('Firma')], r[ix('Vorname')], r[ix('Nachname')]].filter(String).join(' '), done: r[ix('In JTL erfasst')] === true,
+      eingang: r[ix('Eingang')] instanceof Date ? Utilities.formatDate(r[ix('Eingang')], 'Europe/Berlin', 'dd.MM. HH:mm') : '' });
+  });
+
+  const rows = [];
+  const add = (kat, no, kunde, was) => rows.push([kat, no, kunde, was]);
+  app.forEach((v, no) => {
+    if (!jtl.has(no)) add('1 · FEHLT IN JTL', no, v.kunde, (v.done ? 'Häkchen gesetzt, aber kein Auftrag in JTL! ' : '') + 'Eingang ' + v.eingang + ' – Auftrag anlegen bzw. klären.');
+    else if (!v.done) add('2 · Häkchen fehlt', no, v.kunde, 'In JTL vorhanden – Bearbeitung prüfen, dann Häkchen „In JTL erfasst“ setzen.');
+  });
+  mails.forEach(no => { if (!jtl.has(no)) add('3 · E-MAIL OHNE AUFTRAG', no, '', app.has(no) ? 'Steht in der Tabelle, fehlt in JTL.' : 'Nur per E-Mail gekommen – Auftrag von Hand in JTL anlegen.'); });
+  jtl.forEach(no => { if (!app.has(no)) add('4 · nur in JTL', no, '', mails.has(no) ? 'E-Mail-Bestellung, von Hand angelegt – in Ordnung.' : 'Weder aus der App noch als E-Mail erfasst – Herkunft klären.'); });
+  rows.sort((a, b) => a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0);
+
+  let out = ss.getSheetByName(AB.out);
+  if (!out) out = ss.insertSheet(AB.out); else out.clear();
+  const stamp = Utilities.formatDate(new Date(), 'Europe/Berlin', 'dd.MM.yyyy HH:mm');
+  const cnt = k => rows.filter(r => r[0][0] === k).length;
+  const sum = 'Abgleich vom ' + stamp + ': ' + app.size + ' App-Bestellungen · ' + jtl.size + ' Aufträge P-… in JTL · ' + mails.size + ' E-Mail-Bestellungen';
+  out.getRange(1, 1).setValue(sum).setFontWeight('bold');
+  out.getRange(2, 1).setValue('Fehlt in JTL: ' + cnt('1') + ' · Häkchen fehlt: ' + cnt('2') + ' · E-Mail ohne Auftrag: ' + cnt('3') + ' · nur in JTL: ' + cnt('4'));
+  out.getRange(4, 1, 1, 4).setValues([['Ergebnis', 'Bestellnr.', 'Kunde', 'Was tun']]).setFontWeight('bold').setBackground('#EBE7E0');
+  if (rows.length) {
+    out.getRange(5, 1, rows.length, 4).setValues(rows).setWrap(true).setVerticalAlignment('top');
+    rows.forEach((r, i) => { if (/^[13]/.test(r[0])) out.getRange(5 + i, 1, 1, 4).setBackground('#F4D6D6'); });
+  } else {
+    out.getRange(5, 1).setValue('Alles in Ordnung: Jede App- und E-Mail-Bestellung ist in JTL, alle Häkchen sind gesetzt.');
+  }
+  out.setColumnWidth(1, 190); out.setColumnWidth(2, 120); out.setColumnWidth(3, 220); out.setColumnWidth(4, 420); out.setFrozenRows(4);
+  ss.setActiveSheet(out);
+  ui.alert('Abgleich mit JTL', sum + '\n\n1 · Fehlt in JTL: ' + cnt('1') + '\n2 · Häkchen fehlt: ' + cnt('2') +
+    '\n3 · E-Mail ohne Auftrag: ' + cnt('3') + '\n4 · Nur in JTL: ' + cnt('4') + '\n\nDetails im Reiter „' + AB.out + '“. Rot = sofort erledigen.', ui.ButtonSet.OK);
 }
 
 /** Einmal ausführen: legt die Blätter an und prüft den Brevo-Schlüssel. */
