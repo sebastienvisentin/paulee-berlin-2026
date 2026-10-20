@@ -13,7 +13,7 @@ const CFG = {
   senderEmail: 'info@weine-visentin.de',
   senderName: "VISENTIN – Vins Français d'Exception",
   replyTo: 'info@weine-visentin.de',
-  bcc: '',                                     // optional: Kopie jeder Bestätigung an diese Adresse
+  bcc: 'sebastien@weine-visentin.de',          // Blindkopie jeder Eingangsbestätigung (unbefristet)
   notifyTo: 'info@weine-visentin.de',          // Mitteilung, wenn eine Bestellung nach einem JTL-Export eingeht
   notifyCc: 'sebastien@weine-visentin.de',     // Kopie dieser Mitteilung
   testTo: 'sebastien@weine-visentin.de',       // Empfänger der Test-Mails (Menü „Test-Mail an mich senden“)
@@ -29,11 +29,11 @@ const SHEETS = {
   testOrders: 'Test – Bestellungen', testItems: 'Test – Positionen'
 };
 
-const ORDER_COLS = ['Eingang', 'Bestellnr.', 'JTL-Kundennr.', 'JTL-Export', 'In JTL erfasst', 'Typ', 'Sprache',
+const ORDER_COLS = ['Eingang', 'Bestellnr.', 'JTL-Kundennr.', 'JTL-Export', 'In JTL erfasst', 'Hinweis', 'Typ', 'Sprache',
   'Firma', 'Vorname', 'Nachname', 'E-Mail', 'Telefon', 'Kundennr. (Angabe Kunde)', 'USt-IdNr.', 'Straße', 'PLZ', 'Ort',
   'Lieferart', 'Lieferanschrift (abweichend)', 'Wunschtermin', 'Bemerkung', 'Flaschen', 'Zwischensumme', 'Privilège',
   'Versand', 'Gesamt netto', 'MwSt.', 'Gesamt brutto', 'Newsletter', 'Gastro/Fachhandel bestätigt',
-  'Bestellt am (Gerät)', 'Hinweis', 'Bestätigungsmail', 'ID', 'Daten'];
+  'Bestellt am (Gerät)', 'Bestätigungsmail', 'ID', 'Daten'];
 // Spalten der Importdatei für JTL-Ameise (Verkauf → Aufträge), eine Zeile je Position
 const JTL_COLS = ['Kundennummer', 'Anmerkung', 'Kundenkommentar', 'Voraus. Lieferdatum', 'Artikelnummer', 'Menge',
   'Positionsart', 'Rabatt (%)', 'Hinweis (Position)', 'Artikelname', 'Auftragsnummer'];
@@ -128,6 +128,13 @@ function sheet(ss, name, cols) {
     sh.getRange(1, k + 1).setBackground('#F3D9A4').setNote('Vom Team auszufüllen: Kundennummer aus JTL-Wawi. Erst dann wird die Bestellung in die JTL-Importdatei übernommen.');
     sh.getRange(2, k + 1, sh.getMaxRows() - 1, 1).setBackground('#FBF3E2');
   }
+  const hi = cols.indexOf('Hinweis');
+  if (hi >= 0) {                                  // Hinweis vorhanden: Zelle rot hinterlegen
+    const rng = sh.getRange(2, hi + 1, sh.getMaxRows() - 1, 1);
+    sh.setConditionalFormatRules([SpreadsheetApp.newConditionalFormatRule().whenCellNotEmpty()
+      .setBackground('#F4D6D6').setFontColor('#75232A').setRanges([rng]).build()]);
+    sh.getRange(1, hi + 1).setNote('Steht hier etwas: zuerst in der Anleitung unter „Sonderfälle“ nachsehen.');
+  }
   if (old && cols === ORDER_COLS) migrateOrders(old, sh, name.indexOf('Test') === 0);
   return sh;
 }
@@ -150,7 +157,8 @@ function renameInPlace(sh, head) {
 /** Bestellungen aus einem Blatt mit älterer Spaltenfolge übernehmen (Grundlage: Spalte „Daten“). */
 function migrateOrders(old, sh, test) {
   const H = headers(old), data = old.getDataRange().getValues();
-  const keep = ['Eingang', 'JTL-Kundennr.', 'JTL-Export', 'In JTL erfasst', 'Hinweis', 'Bestätigungsmail'];
+  const keep = ['Eingang', 'JTL-Kundennr.', 'JTL-Export', 'In JTL erfasst', 'Hinweis', 'Bestätigungsmail',
+    'Wunschtermin', 'Bemerkung', 'Lieferanschrift (abweichend)', 'Versand'];      // Einträge des Teams bleiben erhalten
   const rows = [];
   for (let r = 1; r < data.length; r++) {
     const raw = H['Daten'] ? data[r][H['Daten'] - 1] : '';
@@ -526,9 +534,13 @@ function checkSheets(sh, shI, test) {
     delete byId[id];
   });
   if (data.length) formatOrderRows(sh, 2, data.length);
+  const open = data.filter(r => r[ix('ID')] && r[ix('In JTL erfasst')] !== true).map(r => r[ix('Bestellnr.')]);
+  const noKd = data.filter(r => r[ix('ID')] && !String(r[ix('JTL-Kundennr.')]).trim()).map(r => r[ix('Bestellnr.')]);
   Object.keys(byId).forEach(id => issues.push('Positionen ohne Bestellung (ID ' + id.slice(0, 8) + '…, Bestellnr. ' + byId[id][0][iy('Bestellnr.')] + ').'));
 
   return '■ ' + name + ': ' + n + ' Bestellungen, ' + itemData.length + ' Positionen geprüft.' +
+    (noKd.length ? '\nOhne JTL-Kundennr. (' + noKd.length + '): ' + noKd.join(', ') : '') +
+    (open.length ? '\nNoch nicht erledigt, Häkchen „In JTL erfasst“ fehlt (' + open.length + '): ' + open.join(', ') : '') +
     (fixed.length ? '\nKorrigiert:\n– ' + fixed.join('\n– ') : '') +
     (issues.length ? '\nBitte prüfen:\n– ' + issues.join('\n– ') : '\nKeine Auffälligkeiten.');
 }
