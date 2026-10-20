@@ -70,17 +70,29 @@ const TXT = {
     steps: [
       ['Wein finden', 'Tischnummer ins Suchfeld tippen, z. B. 128.'],
       ['Vormerken', 'Bei jedem Wein „+ Fl.“ – Ihre Auswahl bleibt gespeichert.'],
-      ['Bestellen', 'Bis 23:59 Uhr, auch ohne Empfang: Die Bestellung wird gesendet, sobald Sie wieder Netz haben.']
+      ['Bestellen', 'Bis 23:59 Uhr, auch ohne Empfang. Nach Prüfung von Verfügbarkeit und Mengen erhalten Sie unsere Auftragsbestätigung.']
     ],
     pickC: 'Privatkunde', pickCSub: 'Preise inkl. MwSt.', pickB: 'Gastronomie & Fachhandel', pickBSub: 'Nettopreise mit B2B-Code',
     howTitle: 'So funktioniert’s',
     modeTitle: 'Preisansicht', modeCSub: 'Preise je Flasche inkl. MwSt.',
     modeBTitle: 'Gastronomie & Fachhandel', modeBSub: 'Nettopreise zzgl. MwSt. – nur für Gastronomie und Weinfachhandel, mit B2B-Code',
-    codeHint: 'Die Nettopreise gelten <b>ausschließlich für die Gastronomie (Restaurants, Bars, Hotels) und den Weinfachhandel</b>. Andere Unternehmen bestellen bitte zu den Preisen für Privatkunden. Ihren B2B-Code finden Sie auf dem B2B-Bestellformular und in unserer E-Mail an Sie.',
+    codeHint: 'Die Nettopreise gelten <b>ausschließlich für die Gastronomie (Restaurants, Bars, Hotels) und den Weinfachhandel</b>. Andere Unternehmen bestellen bitte zu den Preisen für Privatkunden. Maßgeblich sind die Preise Ihrer Kundengruppe bei VISENTIN. Ihren B2B-Code finden Sie auf dem B2B-Bestellformular und in unserer E-Mail an Sie.',
     codePh: 'B2B-Code', unlock: 'Freischalten', codeBad: 'Dieser Code ist nicht gültig. Bitte prüfen Sie die Schreibweise.',
     unlocked: 'Nettopreise freigeschaltet', toPrivate: 'Preisansicht: Privatkunden',
     noWines: 'Noch keine Weine vorgemerkt.', tapAdd: 'Tippen Sie bei einem Wein auf <b>+ Fl.</b>', toList: 'Zur Weinliste',
     next: 'Weiter zu Ihren Angaben',
+    reviewCart: '<b>Wunschmengen.</b> Einige Weine sind nur begrenzt verfügbar. Wir prüfen Ihre Bestellung und bestätigen Mengen und Preise mit unserer Auftragsbestätigung.',
+    nextH: 'So geht es weiter',
+    nextSteps: [
+      ['Eingangsbestätigung', 'Sie erhalten sofort eine E-Mail, dass Ihre Bestellung eingegangen ist. Sie ist noch keine Annahme.'],
+      ['Prüfung', 'Wir prüfen Verfügbarkeit, Mengen und Ihre Kundengruppe bei VISENTIN.'],
+      ['Auftragsbestätigung', 'Erst mit unserer Auftragsbestätigung kommt der Kaufvertrag zustande.']
+    ],
+    nextNote: 'Bei begrenzt verfügbaren Weinen bestätigen wir gegebenenfalls eine geringere Menge. Maßgeblich sind die Preise Ihrer Kundengruppe bei VISENTIN. Läge ein Preis über dem hier angezeigten, erhalten Sie vorab ein neues Angebot – es gilt nur, wenn Sie es ausdrücklich bestätigen.',
+    rev: 'Mir ist bekannt, dass VISENTIN meine Bestellung erst mit der Auftragsbestätigung annimmt und bei begrenzt verfügbaren Weinen eine geringere Menge bestätigen kann.',
+    summaryNote: 'Wunschmengen und Preise laut Paulée-Weinliste. Verbindlich ist unsere Auftragsbestätigung.',
+    footReviewH: 'Bestellung & Auftragsbestätigung',
+    footReview: 'Ihre Bestellung prüfen wir auf Verfügbarkeit, Mengen und Kundengruppe. Einige Weine sind nur begrenzt verfügbar. Der Kaufvertrag kommt mit unserer Auftragsbestätigung zustande.',
     before: 'Bestellen können Sie am <b>2. November 2026 von 0:00 bis 23:59 Uhr</b>. Ihre Auswahl bleibt bis dahin auf diesem Gerät gespeichert.',
     after: ph => `Die Bestellung ist seit dem 2. November, 23:59 Uhr, geschlossen. Für Fragen erreichen Sie uns unter ${ph}.`,
     formTitle: 'Ihre Angaben',
@@ -95,13 +107,13 @@ const TXT = {
     nl: 'Ja, ich möchte den Newsletter von VISENTIN erhalten.',
     adult: 'Ich bin volljährig.',
     agb: `Ich akzeptiere die ${link('AGB', 'AGB')} und habe die ${link('Widerrufsrecht', 'Widerrufsbelehrung')} zur Kenntnis genommen.`,
-    legalC: `Abgabe alkoholischer Getränke nur an Volljährige. Verbraucher können ihre Bestellung binnen 14 Tagen ab Erhalt der Ware ohne Angabe von Gründen widerrufen. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung, für den Newsletter nur mit Ihrer Zustimmung – ${link('Datenschutz', 'Datenschutz')}.`,
+    legalC: `Abweichend von § 3 unserer AGB ist die Weinliste kein verbindliches Angebot: Mit dem Absenden geben Sie Ihre Bestellung ab, der Kaufvertrag kommt erst mit unserer Auftragsbestätigung zustande. Abgabe alkoholischer Getränke nur an Volljährige. Verbraucher können ihre Bestellung binnen 14 Tagen ab Erhalt der Ware ohne Angabe von Gründen widerrufen. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung, für den Newsletter nur mit Ihrer Zustimmung – ${link('Datenschutz', 'Datenschutz')}.`,
     pro: 'Ich bestelle für einen Betrieb der Gastronomie oder des Weinfachhandels. Mir ist bekannt, dass die Nettopreise nur für diese Betriebe gelten.',
-    legalB: `Alle Preise netto zzgl. gesetzlicher MwSt. Es gelten unsere ${link('AGB', 'AGB für Geschäftskunden')}. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung – ${link('Datenschutz', 'Datenschutz')}.`,
+    legalB: `Abweichend von § 3 unserer AGB ist die Weinliste kein verbindliches Angebot: Mit dem Absenden geben Sie Ihre Bestellung ab, der Kaufvertrag kommt erst mit unserer Auftragsbestätigung zustande. Alle Preise netto zzgl. gesetzlicher MwSt. Es gelten unsere ${link('AGB', 'AGB für Geschäftskunden')}. Ihre Angaben verwenden wir zur Abwicklung Ihrer Bestellung – ${link('Datenschutz', 'Datenschutz')}.`,
     buyC: 'Zahlungspflichtig bestellen', buyB: 'Verbindlich bestellen',
     formErr: 'Bitte ergänzen Sie die markierten Angaben.',
     doneTitle: 'Vielen Dank', notFound: 'Nicht gefunden.', yourNo: 'Ihre Bestellnummer',
-    sentMsg: (mail, deliv) => `Ihre Bestellung ist bei uns eingegangen. Sie erhalten eine Bestätigung an <b>${mail}</b>; wegen ${deliv ? 'der Lieferung' : 'der Abholung'} melden wir uns bei Ihnen.`,
+    sentMsg: (mail, deliv) => `Ihre Bestellung ist bei uns eingegangen. Die Eingangsbestätigung geht an <b>${mail}</b>. Nach Prüfung von Verfügbarkeit, Mengen und Kundengruppe erhalten Sie unsere Auftragsbestätigung; wegen ${deliv ? 'der Lieferung' : 'der Abholung'} melden wir uns bei Ihnen.`,
     testMsg: '<b>Testbetrieb.</b> Die Bestellung ist auf diesem Gerät gespeichert, wird aber noch nicht übertragen.',
     waitMsg: '<b>Noch nicht übertragen – kein Empfang.</b><br>Ihre Bestellung ist auf diesem Gerät gespeichert. Sie wird automatisch gesendet, sobald Sie diese Seite mit Empfang wieder öffnen.',
     sendNow: 'Jetzt senden', byMail: 'Per E-Mail senden',
@@ -161,17 +173,29 @@ const TXT = {
     steps: [
       ['Find a wine', 'Type the table number into the search field, e.g. 128.'],
       ['Add', 'Tap “+ Add” on any wine – your selection is saved.'],
-      ['Order', 'Until 11:59 pm, even without a signal: your order is sent as soon as you are back online.']
+      ['Order', 'Until 11:59 pm, even without a signal. Once we have checked availability and quantities, you receive our order confirmation.']
     ],
     pickC: 'Private customer', pickCSub: 'Prices incl. VAT', pickB: 'Restaurants & wine trade', pickBSub: 'Net prices with B2B code',
     howTitle: 'How it works',
     modeTitle: 'Prices', modeCSub: 'Prices per bottle incl. VAT',
     modeBTitle: 'Restaurants & wine trade', modeBSub: 'Net prices plus VAT – only for restaurants, bars, hotels and wine retailers, with B2B code',
-    codeHint: 'Net prices apply <b>exclusively to the hospitality trade (restaurants, bars, hotels) and wine retailers</b>. Other businesses please order at private-customer prices. Your B2B code is printed on the B2B order form and in our email to you.',
+    codeHint: 'Net prices apply <b>exclusively to the hospitality trade (restaurants, bars, hotels) and wine retailers</b>. Other businesses please order at private-customer prices. The prices of your customer group at VISENTIN apply. Your B2B code is printed on the B2B order form and in our email to you.',
     codePh: 'B2B code', unlock: 'Unlock', codeBad: 'This code is not valid. Please check the spelling.',
     unlocked: 'Net prices unlocked', toPrivate: 'Prices: private customers',
     noWines: 'No wines added yet.', tapAdd: 'Tap <b>+ Add</b> on any wine.', toList: 'Back to the wine list',
     next: 'Continue to your details',
+    reviewCart: '<b>Requested quantities.</b> Some wines are available in limited quantities only. We check your order and confirm quantities and prices in our order confirmation.',
+    nextH: 'What happens next',
+    nextSteps: [
+      ['Acknowledgement of receipt', 'You immediately receive an email that your order has arrived. It is not yet an acceptance.'],
+      ['Review', 'We check availability, quantities and your customer group at VISENTIN.'],
+      ['Order confirmation', 'The purchase contract is concluded only with our order confirmation.']
+    ],
+    nextNote: 'For wines in limited supply we may confirm a smaller quantity. The prices of your customer group at VISENTIN apply. Should a price be higher than shown here, you will first receive a new offer – it applies only if you expressly accept it.',
+    rev: 'I understand that VISENTIN accepts my order only with its order confirmation and may confirm a smaller quantity for wines in limited supply.',
+    summaryNote: 'Requested quantities and prices as per the Paulée wine list. Our order confirmation is binding.',
+    footReviewH: 'Order & confirmation',
+    footReview: 'We check your order for availability, quantities and customer group. Some wines are available in limited quantities only. The contract is concluded with our order confirmation.',
     before: 'You can order on <b>2 November 2026 from midnight until 11:59 pm</b>. Your selection stays saved on this device until then.',
     after: ph => `Ordering closed on 2 November at 11:59 pm. For questions please call ${ph}.`,
     formTitle: 'Your details',
@@ -186,13 +210,13 @@ const TXT = {
     nl: 'Yes, I would like to receive the VISENTIN newsletter.',
     adult: 'I am of legal drinking age (18+).',
     agb: `I accept the ${link('AGB', 'terms and conditions')} and have read the ${link('Widerrufsrecht', 'cancellation policy')} (in German).`,
-    legalC: `Alcoholic beverages are sold to adults only. Consumers may cancel their order within 14 days of receiving the goods without giving reasons. We use your details to process your order and, only with your consent, for our newsletter – ${link('Datenschutz', 'privacy policy')} (in German).`,
+    legalC: `Notwithstanding § 3 of our terms, the wine list is not a binding offer: by sending, you place your order, and the contract is concluded only with our order confirmation. Alcoholic beverages are sold to adults only. Consumers may cancel their order within 14 days of receiving the goods without giving reasons. We use your details to process your order and, only with your consent, for our newsletter – ${link('Datenschutz', 'privacy policy')} (in German).`,
     pro: 'I am ordering for a restaurant, bar, hotel or wine retailer. I understand that net prices apply only to these businesses.',
-    legalB: `All prices net, plus statutory VAT. Our ${link('AGB', 'terms for business customers')} apply (in German). We use your details to process your order – ${link('Datenschutz', 'privacy policy')}.`,
+    legalB: `Notwithstanding § 3 of our terms, the wine list is not a binding offer: by sending, you place your order, and the contract is concluded only with our order confirmation. All prices net, plus statutory VAT. Our ${link('AGB', 'terms for business customers')} apply (in German). We use your details to process your order – ${link('Datenschutz', 'privacy policy')}.`,
     buyC: 'Order with obligation to pay', buyB: 'Place binding order',
     formErr: 'Please complete the highlighted fields.',
     doneTitle: 'Thank you', notFound: 'Not found.', yourNo: 'Your order number',
-    sentMsg: (mail, deliv) => `We have received your order. A confirmation will be sent to <b>${mail}</b>; we will contact you about the ${deliv ? 'delivery' : 'pick-up'}.`,
+    sentMsg: (mail, deliv) => `We have received your order. An acknowledgement of receipt is on its way to <b>${mail}</b>. Once we have checked availability, quantities and customer group, you receive our order confirmation; we will contact you about the ${deliv ? 'delivery' : 'pick-up'}.`,
     testMsg: '<b>Test mode.</b> The order is saved on this device but not yet transmitted.',
     waitMsg: '<b>Not sent yet – no signal.</b><br>Your order is saved on this device. It will be sent automatically when you reopen this page with a signal.',
     sendNow: 'Send now', byMail: 'Send by email',
@@ -533,6 +557,7 @@ function orderText(p) {
   if (p.delivery.address) L.push(`Lieferanschrift: ${p.delivery.address}`);
   if (p.delivery.wish) L.push(`Wunschtermin: ${fmtDate(p.delivery.wish, 'de')}`);
   if (p.note) L.push(`Bemerkung: ${p.note}`);
+  L.push('', 'Bestellung über die Paulée-Weinliste: Annahme erst mit Auftragsbestätigung von VISENTIN – Verfügbarkeit, Mengen und Preise der Kundengruppe vorbehalten.');
   L.push('', `Referenz: ${p.id}`);
   return L.join('\n');
 }
@@ -569,7 +594,7 @@ function orderSummaryHtml(p) {
     (d.wish ? `<br>${t.wishShort}: ${esc(fmtDate(d.wish))}` : '') +
     (d.address ? `<br>${t.addrShort}: ${esc(d.address)}` : '') +
     (p.note ? `<br>${t.noteShort}: ${esc(p.note)}` : '') +
-    `</div></fieldset>`;
+    `</div><p class="hint" style="margin:8px 0 0">${t.summaryNote}</p></fieldset>`;
   return h;
 }
 
@@ -679,6 +704,7 @@ const VIEWS = {
            `<div class="line-r">${money(l.lc)}</div>${qtyHtml(l.w.n)}</div>`;
     }
     h += '</div>';
+    h += `<p class="box" style="margin:12px 0 0;font-size:13px">${t.reviewCart}</p>`;
     h += `<fieldset><legend>${t.delivLegend(C.deliveryUntil)}</legend><div class="opts">`;
     for (const [k, [a, b]] of Object.entries(t.deliv)) {
       h += `<label class="opt"><input type="radio" name="deliv" value="${k}"${S.deliv === k ? ' checked' : ''}><span><b>${a}</b><small>${b}</small></span></label>`;
@@ -717,6 +743,10 @@ const VIEWS = {
       </div>`;
     h += `<fieldset><legend>${t.summary}</legend>
       <div class="box" style="margin:0">${t.fl(tot.bottles)} · ${esc(t.delivShort[S.deliv])}${sumHtml(tot, true)}</div></fieldset>`;
+    h += `<fieldset><legend>${t.nextH}</legend>
+      <ol class="steps">${t.nextSteps.map(([a, b], i) => `<li><span class="n">${i + 1}</span><span><b>${a}</b>${b}</span></li>`).join('')}</ol>
+      <p class="hint" style="margin:8px 0 0">${t.nextNote}</p></fieldset>
+      <label class="check" id="c-rev"><input type="checkbox" id="f-rev"><span>${t.rev} <i class="req">*</i></span></label>`;
     if (S.mode === 'c') {
       h += `<label class="check"><input type="checkbox" id="f-nl"${v.nl ? ' checked' : ''}><span>${t.nl}</span></label>
         <label class="check" id="c-adult"><input type="checkbox" id="f-adult"><span>${t.adult} <i class="req">*</i></span></label>
@@ -845,7 +875,7 @@ function submitOrder() {
     wrap.classList.toggle('bad', !ok);
     if (!ok && !bad) bad = el;
   }
-  const checks = S.mode === 'c' ? ['adult', 'agb'] : ['pro'];
+  const checks = S.mode === 'c' ? ['rev', 'adult', 'agb'] : ['rev', 'pro'];
   for (const c of checks) {
     const ok = $('#f-' + c).checked;
     $('#c-' + c).classList.toggle('bad', !ok);
@@ -881,7 +911,8 @@ function submitOrder() {
     items: tot.lines.map(l => ({ n: l.w.n, art: l.w.a, wine: l.w.w, domaine: l.w.d, unit: l.w.u, qty: l.q, priceCents: l.pc, lineCents: l.lc })),
     totals: { subCents: tot.sub, discCents: tot.disc, shipCents: tot.ship, totalCents: tot.total, vatCents: tot.vat, grossCents: tot.gross, vatPct: C.vatPct,
               bottles: tot.bottles, basis: S.mode === 'b' ? 'netto' : 'brutto', privilegePct: C.privilegePct },
-    businessConfirmed: S.mode === 'b'
+    businessConfirmed: S.mode === 'b',
+    reviewAccepted: true                    // Kunde hat bestätigt: Annahme erst mit Auftragsbestätigung, ggf. geringere Menge
   };
   saveOrder({ id, status: 'pending', payload });
   S.cart = {}; store.set(LS.cart, S.cart);
@@ -903,6 +934,8 @@ function renderFoot(ready) {
     <p><span class="status${cached ? '' : ' wait'}">${cached ? t.offlineOk : t.offlineWait}</span></p>
     <h4>Privilège Paulée</h4>
     <p>${t.footPriv(C.privilegePct)}</p>
+    <h4>${t.footReviewH}</h4>
+    <p>${t.footReview}</p>
     <h4>${t.deskH}</h4>
     <p>${t.desk}</p>
     <h4>${t.shipH(C.deliveryUntil)}</h4>

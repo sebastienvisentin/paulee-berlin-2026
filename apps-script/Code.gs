@@ -322,9 +322,17 @@ function buildMail(p) {
   const en = p.lang === 'en', b2b = p.mode === 'B2B', t = p.totals, d = p.delivery || {};
   const accent = b2b ? '#003B54' : '#75232A';
   const L = en ? {
-    subject: `Your order ${p.code} – La Paulée de Berlin 2026`,
+    subject: `Acknowledgement of receipt – your order ${p.code} – La Paulée de Berlin 2026`,
     hello: `Dear ${esc(fullName(p.customer))},`,
-    intro: `thank you for your order at La Paulée de Berlin. We have received it and will be in touch regarding the ${d.type === 'lieferung' ? 'delivery' : 'pick-up'}.`,
+    intro: 'thank you for your order at La Paulée de Berlin. This email acknowledges receipt of your order. It is not yet an acceptance of your order.',
+    items: 'Your order · requested quantities, prices as per the Paulée wine list',
+    nextH: 'What happens next',
+    next: [
+      'We check availability, quantities and your customer group at VISENTIN.',
+      `You then receive our order confirmation – the purchase contract is concluded only with it. We will contact you about the ${d.type === 'lieferung' ? 'delivery' : 'pick-up'}.`
+    ],
+    nextNote: 'For wines in limited supply we may confirm a smaller quantity. The prices of your customer group at VISENTIN apply. Should a price be higher than stated in the Paulée wine list, you will first receive a new offer, which applies only with your express consent.',
+    formation: 'Notwithstanding § 3 of our terms, for orders via the Paulée wine list the contract is concluded only with our order confirmation.',
     no: 'Order number', wine: 'Wine', qty: 'Qty', price: 'Price', sum: 'Amount',
     sub: 'Subtotal', priv: `Privilège Paulée –${t.privilegePct} %`, ship: d.type === 'lieferung' ? 'Shipping' : 'Pick-up', free: 'free',
     total: 'Total', vatIn: `incl. ${t.vatPct} % VAT`, totalNet: 'Total net', vatPlus: `plus ${t.vatPct} % VAT`, gross: 'Total incl. VAT',
@@ -336,9 +344,17 @@ function buildMail(p) {
     legalB: `Our <a href="${CFG.web}AGB" style="color:#857E78">terms for business customers</a> apply.`,
     bye: 'With warm regards,', team: 'Sébastien Visentin and the VISENTIN team'
   } : {
-    subject: `Ihre Bestellung ${p.code} – La Paulée de Berlin 2026`,
+    subject: `Eingangsbestätigung Ihrer Bestellung ${p.code} – La Paulée de Berlin 2026`,
     hello: `Guten Tag ${esc(fullName(p.customer))},`,
-    intro: `vielen Dank für Ihre Bestellung bei La Paulée de Berlin. Wir haben sie erhalten und melden uns wegen ${d.type === 'lieferung' ? 'der Lieferung' : 'der Abholung'} bei Ihnen.`,
+    intro: 'vielen Dank für Ihre Bestellung bei La Paulée de Berlin. Mit dieser E-Mail bestätigen wir den Eingang Ihrer Bestellung. Sie ist noch keine Annahme Ihrer Bestellung.',
+    items: 'Ihre Bestellung · Wunschmengen, Preise laut Paulée-Weinliste',
+    nextH: 'So geht es weiter',
+    next: [
+      'Wir prüfen Verfügbarkeit, Mengen und Ihre Kundengruppe bei VISENTIN.',
+      `Danach erhalten Sie unsere Auftragsbestätigung – erst mit ihr kommt der Kaufvertrag zustande. Wegen ${d.type === 'lieferung' ? 'der Lieferung' : 'der Abholung'} melden wir uns bei Ihnen.`
+    ],
+    nextNote: 'Bei begrenzt verfügbaren Weinen bestätigen wir gegebenenfalls eine geringere Menge. Maßgeblich sind die Preise Ihrer Kundengruppe bei VISENTIN. Läge ein Preis über dem in der Paulée-Weinliste angegebenen, erhalten Sie vorab ein neues Angebot, das nur mit Ihrer ausdrücklichen Zustimmung gilt.',
+    formation: 'Abweichend von § 3 unserer AGB kommt der Vertrag bei Bestellungen über die Paulée-Weinliste erst mit unserer Auftragsbestätigung zustande.',
     no: 'Bestellnummer', wine: 'Wein', qty: 'Fl.', price: 'Preis', sum: 'Betrag',
     sub: 'Zwischensumme', priv: `Privilège Paulée –${t.privilegePct} %`, ship: d.type === 'lieferung' ? 'Versand' : 'Abholung', free: 'kostenfrei',
     total: 'Summe', vatIn: `darin enthalten ${t.vatPct} % MwSt.`, totalNet: 'Summe netto', vatPlus: `zzgl. ${t.vatPct} % MwSt.`, gross: 'Gesamtbetrag brutto',
@@ -384,14 +400,18 @@ function buildMail(p) {
 <tr><td style="padding:16px 28px 0;font:15px/1.55 ${sans};color:#2A2526">${L.hello}<br><br>${L.intro}</td></tr>
 <tr><td style="padding:18px 28px 6px"><div style="font:600 11px ${sans};letter-spacing:.18em;text-transform:uppercase;color:#857E78">${L.no}</div>
 <div style="font:600 24px ${sans};letter-spacing:.06em;color:${accent};margin-top:4px">${p.code}</div></td></tr>
-<tr><td style="padding:8px 28px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items}</table></td></tr>
+<tr><td style="padding:14px 28px 0;font:600 11px ${sans};letter-spacing:.12em;text-transform:uppercase;color:#857E78">${L.items}</td></tr>
+<tr><td style="padding:4px 28px 8px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${items}</table></td></tr>
 <tr><td style="padding:6px 28px 4px"><table role="presentation" width="100%" cellpadding="0" cellspacing="0">${totals}</table></td></tr>
 <tr><td style="padding:16px 28px 0;font:14px/1.55 ${sans};color:#2A2526"><b>${L.deliv[d.type] || ''}</b> · ${L.until}<br>
 ${d.type === 'lieferung' ? '' : `<span style="color:#857E78">${L.hours}</span><br>`}${extra ? extra + '<br>' : ''}
 ${b2b ? `<span style="color:#857E78">${L.b2bNote}</span>` : ''}</td></tr>
+<tr><td style="padding:18px 28px 0"><div style="border-left:3px solid ${accent};background:#EFEAE2;padding:12px 14px;font:14px/1.55 ${sans};color:#2A2526">
+<b style="font:16px ${serif}">${L.nextH}</b><br>1. ${L.next[0]}<br>2. ${L.next[1]}<br>
+<span style="font-size:13px;color:#5E5752">${L.nextNote}</span></div></td></tr>
 <tr><td style="padding:22px 28px 0;font:15px/1.55 ${sans};color:#2A2526">${L.bye}<br><span style="font:16px ${serif}">${L.team}</span></td></tr>
 <tr><td style="padding:22px 28px 26px;font:12px/1.6 ${sans};color:#857E78;border-top:1px solid #E6E0D7">
-${b2b ? L.legalB : L.legal}<br><br>
+${L.formation} ${b2b ? L.legalB : L.legal}<br><br>
 VISENTIN – Vins Français d'Exception · Köpenicker Straße 18–20 · 10997 Berlin<br>
 ${CFG.phone} · <a href="mailto:${CFG.replyTo}" style="color:#857E78">${CFG.replyTo}</a> · <a href="${CFG.web}" style="color:#857E78">weine-visentin.de</a></td></tr>
 </table></td></tr></table></body></html>`;
