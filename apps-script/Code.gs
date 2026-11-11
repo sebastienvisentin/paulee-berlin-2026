@@ -19,6 +19,8 @@ const CFG = {
   testTo: 'sebastien@weine-visentin.de',       // Empfänger der Test-Mails (Menü „Test-Mail an mich senden“)
   logoUrl: 'https://paulee-berlin-2026.pages.dev/img/logo-gold.png',
   deadline: new Date('2026-11-02T23:59:59+01:00'),
+  // Merci Paulée (Bestellnummern M-…): eigenes Zeitfenster
+  merci: { start: new Date('2026-11-13T00:00:00+01:00'), end: new Date('2026-11-15T23:59:59+01:00') },
   phone: '+49 30 695 199 20',
   web: 'https://www.weine-visentin.de/',
   csvCharset: 'UTF-8'                           // falls Umlaute in der Ameise falsch erscheinen: 'windows-1252'
@@ -81,7 +83,7 @@ function doGet() {
 function validate(p) {
   if (!p || typeof p !== 'object') return 'no payload';
   if (!/^[0-9a-f-]{36}$/i.test(p.id || '')) return 'bad id';
-  if (!/^P-[A-Z0-9]{5,6}$/.test(p.code || '')) return 'bad code';
+  if (!/^[PM]-[A-Z0-9]{5,6}$/.test(p.code || '')) return 'bad code';
   if (p.mode !== 'B2C' && p.mode !== 'B2B') return 'bad mode';
   if (!Array.isArray(p.items) || !p.items.length || p.items.length > 300) return 'bad items';
   for (const i of p.items) if (!(i.qty >= 1 && i.qty <= 999)) return 'bad qty';
@@ -94,7 +96,7 @@ function notes(p, test) {
   const n = [];
   if (test) n.push('TEST');
   const created = new Date(p.createdAt);
-  if (created > CFG.deadline) n.push('Bestellzeit nach 23:59 Uhr');
+  if (created > (isMerci(p) ? CFG.merci.end : CFG.deadline)) n.push('Bestellzeit nach 23:59 Uhr');
   const sub = p.items.reduce((a, i) => a + i.priceCents * i.qty, 0);
   if (sub !== p.totals.subCents) n.push('Summenprüfung abweichend');
   if (p.jtlNo) n.push('Bestellnr. doppelt vergeben – JTL-Auftragsnummer ' + p.jtlNo);
@@ -246,12 +248,16 @@ function setMailStatus(ss, test, id, status) {
   if (row) sh.getRange(row, COL('Bestätigungsmail')).setValue(status);
 }
 
+/** Bestellung aus der Merci Paulée (13.–15.11.2026)? */
+const isMerci = p => p.action === 'merci' || /^M-/.test(p.code || '');
+
 /* ---------------- Nachzügler: Bestellung nach einem JTL-Export ---------------- */
 
 /** Geht eine Bestellung nach dem letzten JTL-Export ein, steht sie in keiner Importdatei: Mitteilung an das Team. */
 function notifyLate(ss, p) {
   const last = PropertiesService.getScriptProperties().getProperty('LAST_JTL_EXPORT');
   if (!last) return;                                        // vor dem ersten Export: kommt mit dem ersten Import
+  if (isMerci(p) && new Date(last) < CFG.merci.start) return; // Merci-Bestellung: zählt erst ab einem Export nach Aktionsbeginn
   const status = sendLateNotice(ss, p, new Date(last));
   addNote(ss, p.id, 'Nach dem JTL-Import eingegangen – Mitteilung an ' + CFG.notifyTo + ': ' + status);
 }
@@ -332,9 +338,9 @@ function buildMail(p) {
   const en = p.lang === 'en', b2b = p.mode === 'B2B', t = p.totals, d = p.delivery || {};
   const accent = b2b ? '#003B54' : '#75232A';
   const L = en ? {
-    subject: `Acknowledgement of receipt – your order ${p.code} – La Paulée de Berlin 2026`,
+    subject: `Acknowledgement of receipt – your order ${p.code} – ${isMerci(p) ? 'Merci Paulée' : 'La Paulée de Berlin 2026'}`,
     hello: `Dear ${esc(fullName(p.customer))},`,
-    intro: 'thank you for your order at La Paulée de Berlin. This email acknowledges receipt of your order. It is not yet an acceptance of your order.',
+    intro: (isMerci(p) ? 'thank you for your order in the Merci Paulée.' : 'thank you for your order at La Paulée de Berlin.') + ' This email acknowledges receipt of your order. It is not yet an acceptance of your order.',
     items: 'Your order',
     nextH: 'What happens next',
     next: [
@@ -354,9 +360,9 @@ function buildMail(p) {
     legalB: `Our <a href="${CFG.web}AGB" style="color:#857E78">terms for business customers</a> apply.`,
     bye: 'With warm regards,', team: 'Sébastien Visentin and the VISENTIN team'
   } : {
-    subject: `Eingangsbestätigung Ihrer Bestellung ${p.code} – La Paulée de Berlin 2026`,
+    subject: `Eingangsbestätigung Ihrer Bestellung ${p.code} – ${isMerci(p) ? 'Merci Paulée' : 'La Paulée de Berlin 2026'}`,
     hello: `Guten Tag ${esc(fullName(p.customer))},`,
-    intro: 'vielen Dank für Ihre Bestellung bei La Paulée de Berlin. Mit dieser E-Mail bestätigen wir den Eingang Ihrer Bestellung. Sie ist noch keine Annahme Ihrer Bestellung.',
+    intro: (isMerci(p) ? 'vielen Dank für Ihre Bestellung im Rahmen der Merci Paulée.' : 'vielen Dank für Ihre Bestellung bei La Paulée de Berlin.') + ' Mit dieser E-Mail bestätigen wir den Eingang Ihrer Bestellung. Sie ist noch keine Annahme Ihrer Bestellung.',
     items: 'Ihre Bestellung',
     nextH: 'So geht es weiter',
     next: [
@@ -406,7 +412,7 @@ function buildMail(p) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EBE7E0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#F7F4EF;border:1px solid #D9D2C7">
 <tr><td style="padding:28px 28px 8px;text-align:center"><img src="${CFG.logoUrl}" width="220" alt="La Paulée de Berlin" style="display:inline-block;width:220px;height:auto">
-<div style="font:italic 15px ${serif};color:#857E78;margin-top:6px">Lundi 2 novembre 2026 · Ambassade de France</div></td></tr>
+<div style="font:italic 15px ${serif};color:#857E78;margin-top:6px">${isMerci(p) ? 'Merci Paulée · 13 – 15 novembre 2026' : 'Lundi 2 novembre 2026 · Ambassade de France'}</div></td></tr>
 <tr><td style="padding:16px 28px 0;font:15px/1.55 ${sans};color:#2A2526">${L.hello}<br><br>${L.intro}</td></tr>
 <tr><td style="padding:18px 28px 6px"><div style="font:600 11px ${sans};letter-spacing:.18em;text-transform:uppercase;color:#857E78">${L.no}</div>
 <div style="font:600 24px ${sans};letter-spacing:.06em;color:${accent};margin-top:4px">${p.code}</div></td></tr>
@@ -571,7 +577,7 @@ function abgleichJtl() {
     ss.setActiveSheet(shJ);
     return;
   }
-  const pat = /(?<![A-Z0-9])P-[A-Z0-9]{5,6}(?:-\d+)?/g;
+  const pat = /(?<![A-Z0-9])[PM]-[A-Z0-9]{5,6}(?:-\d+)?/g;
   const grab = sh => {
     const set = new Set();
     if (sh.getLastRow() < 3) return set;
@@ -719,7 +725,7 @@ function jtlRows(p, kdnr, cur) {
   const lief = wishDate(wishRaw);
   // Anmerkung erscheint auf dem Auftrag beim Kunden: kurz, ohne Bestellnummer (die ist die Auftragsnummer)
   // Lieferung: Versandkosten aus der Tabelle (vom Team korrigierbar), sonst aus der Bestellung
-  let anm = 'Paulée 2026 · ' + (DELIV[d.type] || d.type);
+  let anm = 'Paulée 2026 · ' + (isMerci(p) ? 'Merci · ' : '') + (DELIV[d.type] || d.type);
   if (d.type === 'lieferung') {
     const ship = typeof cur.ship === 'number' ? Math.round(cur.ship * 100) : (t.shipCents || 0);
     anm += ship > 0
