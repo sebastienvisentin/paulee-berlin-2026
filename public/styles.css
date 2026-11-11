@@ -254,3 +254,7 @@ legend,.lbl{display:block;font:500 10.5px/1.2 var(--sans);letter-spacing:.17em;t
 .seg{display:flex;gap:4px;background:var(--paper);border:1px solid var(--line);border-radius:var(--r);padding:3px;margin:0 0 12px}
 .seg button{flex:1;border:0;background:transparent;border-radius:7px;padding:8px 6px;font:500 13px/1.2 var(--sans);color:var(--muted)}
 .seg button.on{background:var(--accent);color:#fff}
+
+/* Ausverkaufte Weine (Merci Paulée): sichtbar, aber nicht bestellbar */
+.wine.sold .wine-main, .wine.sold .wine-no, .wine.sold .wine-p { opacity: .45; }
+.wine.sold .ask { color: var(--muted, #857E78); font-style: italic; }

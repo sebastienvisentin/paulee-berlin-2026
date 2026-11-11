@@ -36,7 +36,7 @@ def price(v):
     if isinstance(v, (int, float)):
         return round(float(v), 2)
     s = str(v).strip()
-    if s in ('a.A.', 'a.Z.'):
+    if s in ('a.A.', 'a.Z.', 'ausverkauft'):
         return s
     raise ValueError(f'Unbekannter Preiswert: {v!r}')
 
