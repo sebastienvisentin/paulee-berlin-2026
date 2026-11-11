@@ -430,7 +430,8 @@ function matches(w, tokens, numeric) {
   if (S.flags.has('bio') && !w.o) return false;
   if (S.flags.has('rated') && !S.rate[w.n]) return false;
   if (S.flags.has('cart') && !S.cart[w.n]) return false;
-  if (numeric) return w.n.startsWith(numeric) || w.a.replace(/\s/g, '').includes(numeric.replace('-', ''));
+  // Zahl = Tischnummer bzw. Weinnummer (z. B. 250 oder 250-3) – nur am Anfang der Weinnummer suchen
+  if (numeric) return w.n.startsWith(numeric);
   if (!tokens.length) return true;
   // Suche in beiden Sprachen (z. B. „Burgund“ und „Burgundy“)
   const hay = w._hay ||= fold([w.n, w.w, w.d, w.r, TXT.en.region(w.r), w.v, KIND[w.k] || 'alkoholfrei non-alcoholic', ROOM[w.m], w.o ? 'bio' : ''].join(' '));
