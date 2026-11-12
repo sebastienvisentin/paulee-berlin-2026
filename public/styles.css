@@ -258,3 +258,8 @@ legend,.lbl{display:block;font:500 10.5px/1.2 var(--sans);letter-spacing:.17em;t
 /* Ausverkaufte Weine (Merci Paulée): sichtbar, aber nicht bestellbar */
 .wine.sold .wine-main, .wine.sold .wine-no, .wine.sold .wine-p { opacity: .45; }
 .wine.sold .ask { color: var(--muted, #857E78); font-style: italic; }
+
+/* Coups de cœur (Merci Paulée) */
+.cdc{display:inline-block;border:1px solid var(--gold,#B8995A);color:#9C7A3C;border-radius:3px;font:500 9.5px/1 var(--sans);letter-spacing:.08em;padding:2px 4px;vertical-align:2px;margin-left:6px;text-transform:uppercase}
+.chips .cdc-chip{border-color:#B8995A;color:#9C7A3C}
+.chips .cdc-chip.on{background:#9C7A3C;border-color:#9C7A3C;color:#fff}

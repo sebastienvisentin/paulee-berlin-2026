@@ -34,7 +34,8 @@ const detectLang = () => ((navigator.languages && navigator.languages.length ? n
   .some(l => /^de/i.test(l)) ? 'de' : 'en');
 let LANG = store.get(LS.lang, null) || detectLang();
 
-const A = l => C.action[l];                 // Aktion (Name, Zeitraum in Worten) aus config.js
+const A = l => C.action[l];
+const COEUR = new Set(C.coeur || []);       // Coups de cœur                 // Aktion (Name, Zeitraum in Worten) aus config.js
 const TXT = {
   de: {
     fl: n => n === 1 ? '1 Flasche' : n + ' Flaschen',
@@ -390,7 +391,7 @@ function wineHtml(w) {
   return `<article class="wine${S.cart[w.n] ? ' in' : ''}${p === 'ausverkauft' ? ' sold' : ''}" id="w-${w.n}" data-n="${w.n}">` +
     `<div class="wine-no">${w.n}</div>` +
     `<div class="wine-main"><div class="wine-t"><i class="sym ${w.k}" title="${kindLabel(w.k)}"></i>` +
-    `<span class="wine-n">${esc(w.w)}${w.o ? '<span class="bio">BIO</span>' : ''}${w.k === 'sans' ? '<span class="zero">0 %</span>' : ''}</span></div>` +
+    `<span class="wine-n">${esc(w.w)}${COEUR.has(w.n) ? '<span class="cdc">Coup de cœur</span>' : ''}${w.o ? '<span class="bio">BIO</span>' : ''}${w.k === 'sans' ? '<span class="zero">0 %</span>' : ''}</span></div>` +
     (sub ? `<div class="wine-v">${esc(sub)}</div>` : '') + `</div>` +
     `<div class="wine-p">${price}</div>` +
     `<div class="wine-a">${rateHtml(w.n)}${action}</div></article>`;
@@ -430,6 +431,7 @@ function matches(w, tokens, numeric) {
   if (S.flags.has('bio') && !w.o) return false;
   if (S.flags.has('rated') && !S.rate[w.n]) return false;
   if (S.flags.has('cart') && !S.cart[w.n]) return false;
+  if (S.flags.has('coeur') && !COEUR.has(w.n)) return false;
   // Zahl = Tischnummer bzw. Weinnummer (z. B. 250 oder 250-3) – nur am Anfang der Weinnummer suchen
   if (numeric) return w.n.startsWith(numeric);
   if (!tokens.length) return true;
@@ -1155,6 +1157,14 @@ async function start() {
   applyMode();
   renderBanner();
   renderList();
+  // Coups de cœur: Chip zeigen; Link aus der Mail (…/?coeur) filtert direkt darauf
+  if (COEUR.size) {
+    $('#chipCoeur').hidden = false;
+    if (/[?&#]coeur\b/.test(location.href)) {
+      S.flags.add('coeur'); $('#chipCoeur').classList.add('on'); applyFilter();
+      store.set(LS.seen, 1);                  // direkt zu den Empfehlungen, ohne Begrüßung
+    }
+  }
   updateCart();
   updatePending();
   renderFoot(false);

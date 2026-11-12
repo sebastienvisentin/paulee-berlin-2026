@@ -18,6 +18,9 @@ window.PAULEE_CONFIG = {
           lead: 'As a thank-you for your visit to our tenth anniversary, the Privilège Paulée applies once more – for the guests of the embassy only.' }
   },
 
+  // Persönliche Empfehlungen von Sébastien Visentin (Chip „Coups de cœur“, Link ?coeur)
+  coeur: ['121-1', '101-2', '133-1', '115-1', '262-1', '108-5', '117-3', '124-5', '131-6'],
+
   // Vorschau: Bestellen jederzeit möglich, Hinweisband sichtbar; Bestellungen landen in den Test-Blättern,
   // Mails tragen [TEST]. Automatisch auf jeder Adresse außer paulee.weine-visentin.de (Testadressen).
   preview: location.hostname !== 'paulee.weine-visentin.de',
