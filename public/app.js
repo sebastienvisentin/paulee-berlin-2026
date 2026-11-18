@@ -159,7 +159,7 @@ const TXT = {
       'abholung-hamburg': ['Pick-up in Hamburg', 'Große Elbstraße 131 · free of charge']
     },
     delivShort: { lieferung: 'Delivery', 'abholung-berlin': 'Pick-up Berlin', 'abholung-hamburg': 'Pick-up Hamburg' },
-    delivLegend: () => 'Delivery or pick-up · by 30 November 2026',
+    delivLegend: () => `Delivery or pick-up · by ${C.deliveryUntilEn}`,
     hours: 'Pick-up Tue–Fri 10:30 am–7 pm · Sat 11 am–6 pm',
     abroad: 'Delivery outside Germany: please ask us at info@weine-visentin.de.',
     sub: 'Subtotal', priv: p => `Privilège Paulée –${p} %`, ship: 'Shipping', pickup: 'Pick-up', free: 'free',
@@ -206,7 +206,7 @@ const TXT = {
       firma: 'Company / restaurant', mailB: 'Email (for the confirmation)', kdnr: 'Customer number', ustid: 'VAT ID',
       laToggle: 'Different delivery address', laName: 'Name / company',
       wish: deliv => `Preferred date for ${deliv ? 'delivery' : 'pick-up'} (optional)`,
-      wishHint: () => 'Delivery or pick-up by 30 November 2026. Other requests welcome under comments.', note: 'Comments'
+      wishHint: () => `Delivery or pick-up by ${C.deliveryUntilEn}. Other requests welcome under comments.`, note: 'Comments'
     },
     summary: 'Summary', ordered: 'Your order', wishShort: 'Preferred date', addrShort: 'Delivery address', noteShort: 'Comments',
     nl: 'Yes, I would like to receive the VISENTIN newsletter.',
@@ -230,7 +230,7 @@ const TXT = {
     footPriv: p => `${C.action.name}: –${p} % from the first bottle on all orders placed ${A('en').when}. Wines on request (a.A.), allocation only (a.Z.) and sold-out wines cannot be ordered here – please ask us.`,
     deskH: 'Advice',
     desk: `We are happy to answer questions about wines, terms and delivery: ${C.contactPhone} · ${C.contactMail}.`,
-    shipH: () => 'Delivery & pick-up by 30 November 2026',
+    shipH: () => `Delivery & pick-up by ${C.deliveryUntilEn}`,
     footShipC: (f, p, n) => `Within Germany free shipping from ${f}, otherwise ${p} per parcel (up to ${n} btl.). Prices incl. VAT.`,
     footShipB: (f, p, m) => `Within Germany free delivery from ${f} net, otherwise ${p} per bottle, minimum ${m}. Prices net, plus VAT.`,
     footPickup: 'Free pick-up at VISENTIN – Passion Vin: Berlin, Köpenicker Straße 18–20 · Hamburg, Große Elbstraße 131 · Tue–Fri 10:30 am–7 pm, Sat 11 am–6 pm.',
