@@ -11,7 +11,7 @@ COEUR=[("Domaine Ogereau","Savennières „La Saponaire“ 2024"),("Domaine de L
 T={
 'de':dict(lang='de',subject='Merci – für einen besonderen Tag in der Botschaft',pre='Das Privilège Paulée noch einmal – vom 20. bis 22. November.',
  label='Merci Paulée &middot; 20. bis 22. November 2026',hello='Liebe Weinfreunde,',
- intro='zehn Jahre La Paulée de Berlin – und ein Tag, an dem Sie gemeinsam mit über 70 Winzern die Französische Botschaft mit Leben gefüllt haben. Für Ihren Besuch, Ihre Neugier und die vielen schönen Gespräche danken wir Ihnen von Herzen.',
+ intro='zehn Jahre La Paulée de Berlin – und Sie waren am 2. November dabei, gemeinsam mit über 70 Winzern in der Französischen Botschaft. Für Ihren Besuch, Ihre Neugier und die vielen schönen Gespräche danken wir Ihnen von Herzen.',
  gesture='Als kleine Geste zum Jubiläum gilt das Privilège Paulée noch einmal – ausschließlich für die Gäste der Botschaft:',
  when='ab der ersten Flasche &middot; Freitag, 20., bis Sonntag, 22. November, 23:59 Uhr',
  also='Auch wenn Sie am 2. November bereits bestellt haben.',
@@ -19,10 +19,10 @@ T={
  cta='Zur Weinliste',coeurH='Mes coups de cœur de la Paulée',coeurT='Neun Weine, die mich an diesem Tag besonders berührt haben:',coeurCta='Meine Coups de cœur ansehen',
  delivH='Lieferung und Abholung',deliv='Lieferung oder kostenfreie Abholung in Berlin und Hamburg bis zum 11. Dezember – rechtzeitig vor Weihnachten. Es gelten die Versandkonditionen vom 2. November. Ihre Bestellung bestätigen wir nach Prüfung der Verfügbarkeit.',
  askH='Eine Frage zum Schluss',ask='Was hat Ihnen gefallen – und was dürfen wir bei der nächsten Paulée besser machen? Antworten Sie einfach auf diese Mail. Wir freuen uns auf Ihre Rückmeldung.',
- bye='Herzlich',sign='Sébastien Visentin &amp; das Team von VISENTIN',unsub='Keine weiteren Nachrichten erhalten'),
+ bye='Herzlich',sign='Sébastien Visentin &amp; das Team von VISENTIN',unsub='Keine weiteren Nachrichten erhalten',nl='Möchten Sie von uns hören, wenn neue Weine eintreffen?',nlA='Zum Newsletter anmelden'),
 'en':dict(lang='en',subject='Merci – for a special day at the embassy',pre='The Privilège Paulée once more – from 20 to 22 November.',
  label='Merci Paulée &middot; 20 to 22 November 2026',hello='Dear friends of wine,',
- intro='Ten years of La Paulée de Berlin – and a day on which you and more than 70 winemakers filled the French Embassy with life. For your visit, your curiosity and the many wonderful conversations, thank you from the bottom of our hearts.',
+ intro='Ten years of La Paulée de Berlin – and on 2 November you were there with us and more than 70 winemakers at the French Embassy. For your visit, your curiosity and the many wonderful conversations, thank you from the bottom of our hearts.',
  gesture='As a small gesture for our anniversary, the Privilège Paulée applies once more – exclusively for the guests of the embassy:',
  when='from the first bottle &middot; Friday 20 to Sunday 22 November, 11:59 pm',
  also='Even if you already ordered on 2 November.',
@@ -30,10 +30,10 @@ T={
  cta='Open the wine list',coeurH='Mes coups de cœur de la Paulée',coeurT='Nine wines that particularly moved me on the day:',coeurCta='See my coups de cœur',
  delivH='Delivery and pick-up',deliv='Delivery, or free pick-up in Berlin and Hamburg, by 11 December – in good time for Christmas. Shipping terms as on 2 November. We confirm your order once we have checked availability.',
  askH='One last question',ask='What did you enjoy – and what could we do better at the next Paulée? Simply reply to this email. We look forward to hearing from you.',
- bye='Warm regards',sign='Sébastien Visentin &amp; the VISENTIN team',unsub='Unsubscribe'),
+ bye='Warm regards',sign='Sébastien Visentin &amp; the VISENTIN team',unsub='Unsubscribe',nl='Would you like to hear from us when new wines arrive?',nlA='Subscribe to our newsletter'),
 'fr':dict(lang='fr',subject='Merci – pour une journée particulière à l’Ambassade',pre='Le Privilège Paulée une nouvelle fois – du 20 au 22 novembre.',
  label='Merci Paulée &middot; 20 – 22 novembre 2026',hello='Chers amis du vin,',
- intro='Dix ans de La Paulée de Berlin – et une journée où, aux côtés de plus de 70 vignerons, vous avez fait vivre l’Ambassade de France. Merci du fond du cœur pour votre visite, votre curiosité et ces nombreux beaux échanges.',
+ intro='Dix ans de La Paulée de Berlin – et le 2 novembre, vous étiez là, avec plus de 70 vignerons, à l’Ambassade de France. Merci du fond du cœur pour votre visite, votre curiosité et ces nombreux beaux échanges.',
  gesture='En petit geste pour cet anniversaire, le Privilège Paulée s’applique une nouvelle fois – exclusivement pour les invités de l’Ambassade :',
  when='dès la première bouteille &middot; du vendredi 20 au dimanche 22 novembre, 23 h 59',
  also='Même si vous avez déjà commandé le 2 novembre.',
@@ -41,7 +41,7 @@ T={
  cta='Voir la carte des vins',coeurH='Mes coups de cœur de la Paulée',coeurT='Neuf vins qui m’ont particulièrement touché ce jour-là :',coeurCta='Voir mes coups de cœur',
  delivH='Livraison et retrait',deliv='Livraison, ou retrait gratuit à Berlin et Hambourg, jusqu’au 11 décembre – à temps pour Noël. Conditions d’expédition identiques à celles du 2 novembre. Nous confirmons votre commande après vérification de la disponibilité.',
  askH='Une dernière question',ask='Qu’avez-vous aimé – et que pourrions-nous améliorer lors de la prochaine Paulée ? Répondez simplement à ce message. Nous nous réjouissons de votre retour.',
- bye='Bien chaleureusement',sign='Sébastien Visentin &amp; l’équipe VISENTIN',unsub='Ne plus recevoir de messages'),
+ bye='Bien chaleureusement',sign='Sébastien Visentin &amp; l’équipe VISENTIN',unsub='Ne plus recevoir de messages',nl='Vous souhaitez être informé de l’arrivée de nouveaux vins ?',nlA='S’inscrire à la newsletter'),
 }
 def P(txt,style=''): return f'<p style="margin:0;{style}">{txt}</p>'
 def build(L,b2b):
@@ -70,7 +70,7 @@ def build(L,b2b):
 <p style="margin:0 0 18px;">{t['hello']}</p>{P(t['intro'])}</td></tr>
 <tr><td class="px" style="padding:28px 56px 0;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="#EBE7E0" style="background-color:#EBE7E0;"><tr><td style="padding:26px 26px;font-family:{SANS};line-height:1.6;">
 <p style="margin:0 0 12px;font-size:15px;color:#2E2E2E;">{t['gesture']}</p>
-<p style="margin:0;font-size:12px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#75232A;">Privilège Paulée</p>
+<p style="margin:0;font-size:17px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#75232A;">Privilège Paulée</p>
 <p style="margin:4px 0 0;font-size:30px;font-weight:600;color:#003B54;line-height:1.2;">&ndash;10&nbsp;%</p>
 <p style="margin:6px 0 0;font-size:15px;color:#2E2E2E;">{t['when']}</p>
 <p style="margin:10px 0 0;font-size:15px;color:#2E2E2E;font-style:italic;">{t['also']}</p>{b2bline}
@@ -90,6 +90,7 @@ def build(L,b2b):
 <p style="margin:0;">+49 30 695 199 20 &middot; <a href="mailto:info@weine-visentin.de" style="color:#75232A;text-decoration:none;">info@weine-visentin.de</a></p>
 <p style="margin:0;"><a href="https://www.weine-visentin.de" style="color:#75232A;text-decoration:none;">weine-visentin.de</a></p></td></tr>
 <tr><td align="center" bgcolor="#EBE7E0" style="background-color:#EBE7E0;padding:0 56px 30px;font-family:{SANS};font-size:12px;line-height:1.6;color:#8A8A8A;">
+<p style="margin:0 0 10px;">{t['nl']} <a href="https://www.weine-visentin.de/Newsletter" style="color:#75232A;text-decoration:underline;">{t['nlA']}</a></p>
 <p style="margin:0;"><a href="{{{{ unsubscribe }}}}" style="color:#8A8A8A;text-decoration:underline;">{t['unsub']}</a></p></td></tr>
 </table></td></tr></table></body></html>'''
 for L in ('de','en','fr'):
