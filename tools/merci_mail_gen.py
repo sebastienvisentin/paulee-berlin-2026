@@ -13,7 +13,7 @@ T={
  label='Merci Paulée &middot; 20. bis 22. November 2026',hello='Liebe Weinfreunde,',
  intro='zehn Jahre La Paulée de Berlin – und Sie waren am 2. November dabei, gemeinsam mit über 70 Winzern in der Französischen Botschaft. Für Ihren Besuch, Ihre Neugier und die vielen schönen Gespräche danken wir Ihnen von Herzen.',
  gesture='Als kleine Geste zum Jubiläum gilt das Privilège Paulée noch einmal – ausschließlich für die Gäste der Botschaft:',
- when='ab der ersten Flasche &middot; Freitag, 20., bis Sonntag, 22. November, 23:59 Uhr',
+ when='Gültig ausschließlich für Bestellungen von Freitag, 20., bis Sonntag, 22. November, 23:59 Uhr.',first='Ab der ersten Flasche.',
  also='Auch wenn Sie am 2. November bereits bestellt haben.',
  b2b='Für Gastronomie und Fachhandel gelten mit dem Code <strong style="color:#003B54;">PAULEE-PRO</strong> Ihre Nettopreise.',
  cta='Zur Weinliste',coeurH='Mes coups de cœur de la Paulée',coeurT='Neun Weine, die mich an diesem Tag besonders berührt haben:',coeurCta='Meine Coups de cœur ansehen',
@@ -24,7 +24,7 @@ T={
  label='Merci Paulée &middot; 20 to 22 November 2026',hello='Dear friends of wine,',
  intro='Ten years of La Paulée de Berlin – and on 2 November you were there with us and more than 70 winemakers at the French Embassy. For your visit, your curiosity and the many wonderful conversations, thank you from the bottom of our hearts.',
  gesture='As a small gesture for our anniversary, the Privilège Paulée applies once more – exclusively for the guests of the embassy:',
- when='from the first bottle &middot; Friday 20 to Sunday 22 November, 11:59 pm',
+ when='Valid exclusively for orders placed from Friday 20 to Sunday 22 November, 11:59 pm.',first='From the first bottle.',
  also='Even if you already ordered on 2 November.',
  b2b='Restaurants and wine merchants see their net prices with the code <strong style="color:#003B54;">PAULEE-PRO</strong>.',
  cta='Open the wine list',coeurH='Mes coups de cœur de la Paulée',coeurT='Nine wines that particularly moved me on the day:',coeurCta='See my coups de cœur',
@@ -35,7 +35,7 @@ T={
  label='Merci Paulée &middot; 20 – 22 novembre 2026',hello='Chers amis du vin,',
  intro='Dix ans de La Paulée de Berlin – et le 2 novembre, vous étiez là, avec plus de 70 vignerons, à l’Ambassade de France. Merci du fond du cœur pour votre visite, votre curiosité et ces nombreux beaux échanges.',
  gesture='En petit geste pour cet anniversaire, le Privilège Paulée s’applique une nouvelle fois – exclusivement pour les invités de l’Ambassade :',
- when='dès la première bouteille &middot; du vendredi 20 au dimanche 22 novembre, 23 h 59',
+ when='Valable exclusivement pour les commandes passées du vendredi 20 au dimanche 22 novembre, 23 h 59.',first='Dès la première bouteille.',
  also='Même si vous avez déjà commandé le 2 novembre.',
  b2b='Pour la restauration et les cavistes, le code <strong style="color:#003B54;">PAULEE-PRO</strong> donne accès à vos prix nets.',
  cta='Voir la carte des vins',coeurH='Mes coups de cœur de la Paulée',coeurT='Neuf vins qui m’ont particulièrement touché ce jour-là :',coeurCta='Voir mes coups de cœur',
@@ -72,7 +72,8 @@ def build(L,b2b):
 <p style="margin:0 0 12px;font-size:15px;color:#2E2E2E;">{t['gesture']}</p>
 <p style="margin:0;font-size:17px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#75232A;">Privilège Paulée</p>
 <p style="margin:4px 0 0;font-size:30px;font-weight:600;color:#003B54;line-height:1.2;">&ndash;10&nbsp;%</p>
-<p style="margin:6px 0 0;font-size:15px;color:#2E2E2E;">{t['when']}</p>
+<p style="margin:8px 0 0;font-size:15px;font-weight:600;color:#003B54;">{t['when']}</p>
+<p style="margin:2px 0 0;font-size:15px;color:#2E2E2E;">{t['first']}</p>
 <p style="margin:10px 0 0;font-size:15px;color:#2E2E2E;font-style:italic;">{t['also']}</p>{b2bline}
 </td></tr></table></td></tr>
 <tr><td align="center" style="padding:34px 56px 6px;">{btn(t['cta'],APP,'#75232A')}</td></tr>
