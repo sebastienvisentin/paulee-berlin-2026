@@ -10,7 +10,8 @@ SKIP = {'sw.js', '_headers', '_redirects', 'index.html'}  # index.html = '/'
 TEMPLATE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'sw.template.js')
 
 files = []
-for d, _, fs in os.walk(ROOT):
+for d, dirs, fs in os.walk(ROOT):
+    dirs[:] = [x for x in dirs if x != 'mail']  # Mail-Vorlagen (Brevo) nicht in den App-Cache
     for f in fs:
         rel = os.path.relpath(os.path.join(d, f), ROOT).replace(os.sep, '/')
         if rel not in SKIP and not f.startswith('.'):
