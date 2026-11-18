@@ -20,7 +20,7 @@ const CFG = {
   logoUrl: 'https://paulee-berlin-2026.pages.dev/img/logo-gold.png',
   deadline: new Date('2026-11-02T23:59:59+01:00'),
   // Merci Paulée (Bestellnummern M-…): eigenes Zeitfenster
-  merci: { start: new Date('2026-11-13T00:00:00+01:00'), end: new Date('2026-11-15T23:59:59+01:00') },
+  merci: { start: new Date('2026-11-20T00:00:00+01:00'), end: new Date('2026-11-22T23:59:59+01:00') },
   phone: '+49 30 695 199 20',
   web: 'https://www.weine-visentin.de/',
   csvCharset: 'UTF-8'                           // falls Umlaute in der Ameise falsch erscheinen: 'windows-1252'
@@ -248,7 +248,7 @@ function setMailStatus(ss, test, id, status) {
   if (row) sh.getRange(row, COL('Bestätigungsmail')).setValue(status);
 }
 
-/** Bestellung aus der Merci Paulée (13.–15.11.2026)? */
+/** Bestellung aus der Merci Paulée (20.–22.11.2026)? */
 const isMerci = p => p.action === 'merci' || /^M-/.test(p.code || '');
 
 /* ---------------- Nachzügler: Bestellung nach einem JTL-Export ---------------- */
@@ -412,7 +412,7 @@ function buildMail(p) {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#EBE7E0"><tr><td align="center" style="padding:24px 12px">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:600px;background:#F7F4EF;border:1px solid #D9D2C7">
 <tr><td style="padding:28px 28px 8px;text-align:center"><img src="${CFG.logoUrl}" width="220" alt="La Paulée de Berlin" style="display:inline-block;width:220px;height:auto">
-<div style="font:italic 15px ${serif};color:#857E78;margin-top:6px">${isMerci(p) ? 'Merci Paulée · 13 – 15 novembre 2026' : 'Lundi 2 novembre 2026 · Ambassade de France'}</div></td></tr>
+<div style="font:italic 15px ${serif};color:#857E78;margin-top:6px">${isMerci(p) ? 'Merci Paulée · 20 – 22 novembre 2026' : 'Lundi 2 novembre 2026 · Ambassade de France'}</div></td></tr>
 <tr><td style="padding:16px 28px 0;font:15px/1.55 ${sans};color:#2A2526">${L.hello}<br><br>${L.intro}</td></tr>
 <tr><td style="padding:18px 28px 6px"><div style="font:600 11px ${sans};letter-spacing:.18em;text-transform:uppercase;color:#857E78">${L.no}</div>
 <div style="font:600 24px ${sans};letter-spacing:.06em;color:${accent};margin-top:4px">${p.code}</div></td></tr>
